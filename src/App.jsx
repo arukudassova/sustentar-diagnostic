@@ -966,8 +966,11 @@ export default function App() {
     <div style={s.page}>
       <div style={{ ...s.card, maxWidth: 680 }}>
         <Header lang={lang} setLang={setLang} onHelp={() => setShowOnboarding(true)} />
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-          <span style={{ color: TEAL, fontSize: 13, fontWeight: 600 }}>{cityName}</span>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button style={s.backHomeBtn} onClick={reset}>{lang === "es" ? "← Inicio" : "← Home"}</button>
+            <span style={{ color: TEAL, fontSize: 13, fontWeight: 600 }}>{cityName}</span>
+          </div>
           <span style={{ color: MUTED, fontSize: 12 }}>{t.progressLabel(answered, totalQ)}</span>
         </div>
         <div style={s.progressBar}>
@@ -1052,6 +1055,7 @@ const s = {
   btnPrimary: { display: "block", width: "100%", background: TEAL, color: WHITE, border: "none", borderRadius: 7, padding: "12px 24px", fontWeight: 600, fontSize: 14, fontFamily: "inherit", cursor: "pointer" },
   btnOutline: { background: WHITE, color: TEAL, border: `1px solid ${TEAL_MID}`, borderRadius: 7, padding: "10px 20px", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "inherit" },
   btnSkip: { background: "transparent", color: MUTED, border: `1px dashed ${BORDER}`, borderRadius: 7, padding: "8px 14px", fontWeight: 500, fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginTop: 8, width: "100%", textAlign: "center" },
+  backHomeBtn: { background: "transparent", color: MUTED, border: `1px solid ${BORDER}`, borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" },
   hint: { textAlign: "center", color: MUTED, fontSize: 12, marginTop: 12 },
   progressBar: { height: 5, background: TEAL_LIGHT, borderRadius: 3, marginBottom: 20 },
   progressFill: { height: "100%", background: TEAL, borderRadius: 3, transition: "width 0.3s" },
