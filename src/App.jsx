@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 
 const LOGO_URL = "/logo.png";
@@ -505,6 +507,44 @@ export default function App() {
   const [osmLoading, setOsmLoading] = useState(false);
   const [osmResult, setOsmResult] = useState(null);
 
+  // API data state
+  const [apiCities, setApiCities] = useState(null);
+  const [apiQuestions, setApiQuestions] = useState(null);
+  const [apiMeasures, setApiMeasures] = useState(null);
+  const [apiLoading, setApiLoading] = useState(true);
+  const [apiError, setApiError] = useState(false);
+
+  // Fetch all data on mount and when lang changes
+  useEffect(() => {
+    async function fetchAll() {
+      setApiLoading(true);
+      setApiError(false);
+      try {
+        const [citiesRes, questionsRes, measuresRes] = await Promise.all([
+          fetch(`${API_URL}/api/cities`),
+          fetch(`${API_URL}/api/questions?lang=${lang}`),
+          fetch(`${API_URL}/api/measures?lang=${lang}`),
+        ]);
+        const [cities, questions, measures] = await Promise.all([
+          citiesRes.json(), questionsRes.json(), measuresRes.json()
+        ]);
+        setApiCities(cities);
+        setApiQuestions(questions);
+        setApiMeasures(measures);
+      } catch (e) {
+        console.warn("API unavailable, falling back to local data");
+        setApiError(true);
+      }
+      setApiLoading(false);
+    }
+    fetchAll();
+  }, [lang]);
+
+  // Use API data if available, otherwise fall back to hardcoded
+  const CITIES_DATA = apiCities || CITY_GROUPS;
+  const CATEGORIES_DATA = apiQuestions || CATEGORIES[lang];
+  const MEASURES_DATA = apiMeasures || MEASURE_GROUPS;
+
   async function fetchOSMData() {
     if (!cityName) return;
     setOsmLoading(true);
@@ -512,34 +552,54 @@ export default function App() {
 
     const base = cityName.split(",")[0].trim();
 
-    // Hardcoded real OSM data for Buenos Aires (verified counts)
-    const DEMO_DATA = {
-      "Buenos Aires": { cycleways: 312, bikeParking: 847, bikeShare: 201, pedestrian: 143, busStops: 4821 },
-      "Rosario":      { cycleways: 89,  bikeParking: 134, bikeShare: 42,  pedestrian: 38,  busStops: 1203 },
-      "Córdoba":      { cycleways: 54,  bikeParking: 98,  bikeShare: 18,  pedestrian: 29,  busStops: 986  },
-      "Mendoza":      { cycleways: 31,  bikeParking: 61,  bikeShare: 0,   pedestrian: 17,  busStops: 542  },
-      "Bogotá":       { cycleways: 421, bikeParking: 312, bikeShare: 74,  pedestrian: 287, busStops: 6102 },
-      "Lima":         { cycleways: 48,  bikeParking: 67,  bikeShare: 8,   pedestrian: 54,  busStops: 3847 },
-      "Santiago":     { cycleways: 198, bikeParking: 423, bikeShare: 87,  pedestrian: 96,  busStops: 2934 },
-      "Montevideo":   { cycleways: 77,  bikeParking: 189, bikeShare: 31,  pedestrian: 44,  busStops: 1121 },
-    };
-
-    // Simulate a brief loading pause for realism
+    // Simulate brief loading pause
     await new Promise(r => setTimeout(r, 1200));
 
-    const data = DEMO_DATA[base];
+    let osmData = null;
 
-    if (!data) {
+    // Try API first
+    try {
+      const res = await fetch(`${API_URL}/api/osm/${encodeURIComponent(base)}`);
+      if (res.ok) {
+        const d = await res.json();
+        osmData = {
+          cycleways: d.cycleways,
+          bikeParking: d.bike_parking,
+          bikeShare: d.bike_share,
+          pedestrian: d.pedestrian,
+          busStops: d.bus_stops
+        };
+      }
+    } catch (e) {
+      console.warn("API OSM fetch failed, using local demo data");
+    }
+
+    // Fallback to hardcoded demo data
+    if (!osmData) {
+      const DEMO_DATA = {
+        "Buenos Aires": { cycleways: 312, bikeParking: 847, bikeShare: 201, pedestrian: 143, busStops: 4821 },
+        "Rosario":      { cycleways: 89,  bikeParking: 134, bikeShare: 42,  pedestrian: 38,  busStops: 1203 },
+        "Córdoba":      { cycleways: 54,  bikeParking: 98,  bikeShare: 18,  pedestrian: 29,  busStops: 986  },
+        "Mendoza":      { cycleways: 31,  bikeParking: 61,  bikeShare: 0,   pedestrian: 17,  busStops: 542  },
+        "Bogotá":       { cycleways: 421, bikeParking: 312, bikeShare: 74,  pedestrian: 287, busStops: 6102 },
+        "Lima":         { cycleways: 48,  bikeParking: 67,  bikeShare: 8,   pedestrian: 54,  busStops: 3847 },
+        "Santiago":     { cycleways: 198, bikeParking: 423, bikeShare: 87,  pedestrian: 96,  busStops: 2934 },
+        "Montevideo":   { cycleways: 77,  bikeParking: 189, bikeShare: 31,  pedestrian: 44,  busStops: 1121 },
+      };
+      osmData = DEMO_DATA[base] || null;
+    }
+
+    if (!osmData) {
       // For cities without demo data, show a friendly message
       setOsmResult({ error: true, errorMsg: lang === "es"
-        ? `Datos de demostración no disponibles para ${base}. En la versión final se conectará con OpenStreetMap en tiempo real.`
-        : `Demo data not available for ${base}. The final version will connect to OpenStreetMap in real time.`
+        ? `Datos no disponibles para ${base}. En la versión final se conectará con OpenStreetMap en tiempo real.`
+        : `Data not available for ${base}. The final version will connect to OpenStreetMap in real time.`
       });
       setOsmLoading(false);
       return;
     }
 
-    const { cycleways, bikeParking, bikeShare, pedestrian, busStops } = data;
+    const { cycleways, bikeParking, bikeShare, pedestrian, busStops } = osmData;
 
     const score = (val, thresholds) => {
       for (const [min, pts] of thresholds) { if (val >= min) return pts; }
@@ -574,7 +634,7 @@ export default function App() {
   }
 
   const t = UI[lang];
-  const cats = CATEGORIES[lang];
+  const cats = CATEGORIES_DATA;
   const totalQ = cats.flatMap((c) => c.questions).length;
   const answered = Object.keys(answers).length;
   const currentCat = cats[catIdx];
@@ -609,7 +669,7 @@ export default function App() {
     // 2 from first matching group, then 1 each from the rest
     const result = [];
     let isFirst = true;
-    for (const grp of MEASURE_GROUPS) {
+    for (const grp of MEASURES_DATA) {
       const matches = grp.measures.filter(m => codes.has(m.code));
       if (matches.length === 0) continue;
       result.push(...matches.slice(0, isFirst ? 2 : 1));
@@ -742,7 +802,7 @@ export default function App() {
           <label style={{ ...s.label, marginTop: 14 }}>{t.cityLabel}</label>
           <select style={s.select} value={cityName} onChange={(e) => setCityName(e.target.value)}>
             <option value="">{t.cityPlaceholder}</option>
-            {CITIES[lang].map(g => (
+            {CITIES_DATA.map(g => (
               <optgroup key={g.country} label={g.country}>
                 {g.cities.map(c => <option key={c} value={c}>{c}</option>)}
               </optgroup>
@@ -800,7 +860,7 @@ export default function App() {
         <div style={s.tilesPanel}>
           <div style={s.tilesPanelTitle}>{lang === "es" ? "Medidas PMUS" : "PMUS Measures"}</div>
           <div style={s.tilesPanelSub}>{lang === "es" ? "Haz clic para más información" : "Click for more information"}</div>
-          {MEASURE_GROUPS.map(g => (
+          {MEASURES_DATA.map(g => (
             <div key={g.group} style={s.tileGroup}>
               <div style={{ ...s.tileGroupLabel, color: g.color }}>{g.group} · {g.label[lang]}</div>
               <div style={s.tileRow}>
@@ -967,7 +1027,7 @@ export default function App() {
                 </div>
                 <div style={s.suggestGrid}>
                   {suggested.map(m => {
-                    const grp = MEASURE_GROUPS.find(g => g.measures.some(x => x.code === m.code));
+                    const grp = MEASURES_DATA.find(g => g.measures.some(x => x.code === m.code));
                     return (
                       <div key={m.code} style={{ ...s.suggestCard, borderTop: `3px solid ${grp.color}`, background: grp.light }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
