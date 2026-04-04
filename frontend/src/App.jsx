@@ -506,6 +506,10 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(true);
   const [osmLoading, setOsmLoading] = useState(false);
   const [osmResult, setOsmResult] = useState(null);
+  const [fbCity, setFbCity] = useState("");
+  const [fbName, setFbName] = useState("");
+  const [fbMessage, setFbMessage] = useState("");
+  const [fbSubmitted, setFbSubmitted] = useState(false);
 
   // API data state
   const [apiCities, setApiCities] = useState(null);
@@ -657,7 +661,17 @@ export default function App() {
     return Math.round((raw / totalMax) * 100);
   }
 
-  function reset() { setStep("intro"); setAnswers({}); setCatIdx(0); setCityName(""); setSelectedTile(null); }
+  function submitFeedback() {
+    if (!fbMessage.trim()) return;
+    fetch(`${API_URL}/api/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ city: fbCity, name: fbName, message: fbMessage })
+    }).catch(() => {});
+    setFbSubmitted(true);
+  }
+
+    function reset() { setStep("intro"); setAnswers({}); setCatIdx(0); setCityName(""); setSelectedTile(null); }
 
   function getSuggestedMeasures() {
     const lowCats = cats.filter((cat) => {
@@ -736,8 +750,12 @@ export default function App() {
     },
   };
 
-  if (step === "intro") return (
-    <div style={s.page}>
+  // ── SINGLE UNIFIED RETURN ────────────────────────────────────
+  const isQuizActive = step !== "intro";
+
+  return (
+    <div style={s.siteWrapper}>
+
       {/* ONBOARDING OVERLAY */}
       {showOnboarding && (
         <div style={s.onboardOverlay}>
@@ -749,9 +767,7 @@ export default function App() {
               <div style={{ marginLeft: "auto" }}><LangToggle lang={lang} setLang={setLang} /></div>
             </div>
             <p style={s.onboardSub}>{ONBOARDING[lang].sub}</p>
-
             <div style={s.onboardGrid}>
-              {/* LEFT: how it works */}
               <div>
                 <div style={s.onboardSectionTitle}>{lang === "es" ? "Cómo funciona" : "How it works"}</div>
                 {ONBOARDING[lang].sections.map((sec, i) => (
@@ -764,8 +780,6 @@ export default function App() {
                   </div>
                 ))}
               </div>
-
-              {/* RIGHT: measure card anatomy */}
               <div>
                 <div style={s.onboardSectionTitle}>{ONBOARDING[lang].cardTitle}</div>
                 <div style={s.onboardCard}>
@@ -781,371 +795,434 @@ export default function App() {
                 </div>
               </div>
             </div>
-
-            <button style={s.onboardBtn} onClick={() => setShowOnboarding(false)}>
-              {ONBOARDING[lang].btn}
-            </button>
+            <button style={s.onboardBtn} onClick={() => setShowOnboarding(false)}>{ONBOARDING[lang].btn}</button>
           </div>
         </div>
       )}
 
-      <div style={s.introWrap}>
-        <div style={s.card}>
-          <Header lang={lang} setLang={setLang} onHelp={() => setShowOnboarding(true)} />
-          <div style={s.banner}><span style={s.bannerDot} />{t.banner}</div>
-          <h1 style={s.h1}>{t.introTitle}</h1>
-          <p style={s.desc}>{t.introDesc}</p>
-          <div style={{ ...s.sourceNote, marginBottom: 16 }}>{t.source}</div>
-          <div style={s.chips}>
-            {cats.map((c) => <span key={c.id} style={s.chip}>{c.label}</span>)}
+      {/* TILE MODAL */}
+      {selectedTile && (
+        <div style={s.tileModal} onClick={() => setSelectedTile(null)}>
+          <div style={{ ...s.tileModalBox, borderTop: `4px solid ${selectedTile.groupColor}`, background: selectedTile.groupLight }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+              <span style={{ ...s.tileModalCode, color: selectedTile.groupColor }}>{selectedTile.code}</span>
+              <button style={s.tileModalClose} onClick={() => setSelectedTile(null)}>✕</button>
+            </div>
+            <div style={s.tileModalName}>{selectedTile.name[lang]}</div>
+            <p style={s.tileModalDesc}>{selectedTile.desc[lang]}</p>
           </div>
-          <label style={{ ...s.label, marginTop: 14 }}>{t.cityLabel}</label>
-          <select style={s.select} value={cityName} onChange={(e) => setCityName(e.target.value)}>
-            <option value="">{t.cityPlaceholder}</option>
-            {CITIES_DATA.map(g => (
-              <optgroup key={g.country} label={g.country}>
-                {g.cities.map(c => <option key={c} value={c}>{c}</option>)}
-              </optgroup>
-            ))}
-          </select>
-          <button style={{ ...s.btnPrimary, opacity: cityName.trim() ? 1 : 0.4, cursor: cityName.trim() ? "pointer" : "default" }}
-            disabled={!cityName.trim()} onClick={() => setStep("quiz")}>
-            {t.startBtn}
-          </button>
+        </div>
+      )}
 
-          {/* OSM AUTO-FILL */}
-          {cityName.trim() && (
-            <div style={s.osmPanel}>
-              <div style={s.osmPanelTop}>
-                <div>
-                  <div style={s.osmPanelTitle}>{lang === "es" ? "Pre-completar desde OpenStreetMap" : "Pre-fill from OpenStreetMap"}</div>
-                  <div style={s.osmPanelSub}>{lang === "es" ? "Datos espaciales reales para 5 preguntas de movilidad activa y transporte" : "Real spatial data for 5 active mobility & transport questions"}</div>
-                </div>
-                <button
-                  style={{ ...s.osmBtn, opacity: osmLoading ? 0.6 : 1, cursor: osmLoading ? "default" : "pointer" }}
-                  disabled={osmLoading}
-                  onClick={fetchOSMData}
-                >
-                  {osmLoading ? (lang === "es" ? "Consultando..." : "Querying...") : (lang === "es" ? "Analizar ciudad" : "Analyse city")}
-                </button>
-              </div>
-              {osmResult && !osmResult.error && (
-                <div style={s.osmResult}>
-                  <div style={s.osmResultTitle}>{lang === "es" ? `${osmResult.filledCount} respuestas completadas automáticamente para ${osmResult.city}` : `${osmResult.filledCount} answers auto-filled for ${osmResult.city}`}</div>
-                  <div style={s.osmResultGrid}>
-                    {osmResult.fields.map(f => (
-                      <div key={f.id} style={s.osmResultRow}>
-                        <span style={s.osmResultLabel}>{f.label}</span>
-                        <span style={s.osmResultVal}>{f.value} {f.unit}</span>
-                        <span style={{ ...s.osmResultScore, background: f.score === 3 ? "#dcf5e7" : f.score === 2 ? "#fef3c7" : "#fee2e2", color: f.score === 3 ? "#1a7a4a" : f.score === 2 ? "#8a6200" : "#9a1a1a" }}>{f.score} pts</span>
+      {/* STICKY HEADER */}
+      <header style={s.stickyHeader}>
+        <div style={s.headerInner}>
+          <img src={LOGO_URL} alt="Sustentar" style={{ height: 28, objectFit: "contain", cursor: "pointer" }} onClick={reset} />
+          {isQuizActive && cityName && (
+            <span style={s.navCityBadge}>{cityName}</span>
+          )}
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+            {isQuizActive && (
+              <button style={s.navRestartBtn} onClick={reset}>
+                {lang === "es" ? "← Inicio" : "← Home"}
+              </button>
+            )}
+            <button style={s.helpBtn} onClick={() => setShowOnboarding(true)} title={lang === "es" ? "Cómo usar" : "How to use"}>?</button>
+            <LangToggle lang={lang} setLang={setLang} />
+          </div>
+        </div>
+      </header>
+
+      {/* HERO — intro only */}
+      {step === "intro" && (
+        <section style={s.heroSection}>
+          <div style={s.heroInner}>
+            <div style={s.heroBadge}>{lang === "es" ? "Guía PMUS Argentina · Versión prototipo" : "PMUS Argentina Guide · Prototype version"}</div>
+            <h1 style={s.heroTitle}>{lang === "es" ? "Evaluación de Movilidad Sostenible Municipal" : "Municipal Sustainable Mobility Assessment"}</h1>
+            <p style={s.heroSub}>{lang === "es" ? "Diagnóstico del estado de la movilidad urbana basado en la metodología de la Guía PMUS Argentina, co-elaborada por Sustentar y el Ministerio de Transporte de la Nación." : "Urban mobility diagnostic based on the methodology of the PMUS Argentina Guide, co-authored by Sustentar and the Ministry of Transport."}</p>
+            <div style={s.heroStats}>
+              <div style={s.heroStat}><span style={s.heroStatNum}>52</span><span style={s.heroStatLabel}>{lang === "es" ? "Preguntas" : "Questions"}</span></div>
+              <div style={s.heroStatDiv} />
+              <div style={s.heroStat}><span style={s.heroStatNum}>6</span><span style={s.heroStatLabel}>{lang === "es" ? "Dimensiones" : "Dimensions"}</span></div>
+              <div style={s.heroStatDiv} />
+              <div style={s.heroStat}><span style={s.heroStatNum}>33</span><span style={s.heroStatLabel}>{lang === "es" ? "Medidas PMUS" : "PMUS Measures"}</span></div>
+            </div>
+            <a href="#herramienta" style={s.heroScrollBtn}>{lang === "es" ? "Comenzar diagnóstico" : "Start assessment"}</a>
+          </div>
+        </section>
+      )}
+
+      {/* TOOL SECTION */}
+      <section id="herramienta" style={s.toolSection}>
+
+        {/* INTRO */}
+        {step === "intro" && (
+          <div style={s.introWrap}>
+            <div style={s.card}>
+              <div style={s.banner}><span style={s.bannerDot} />{t.banner}</div>
+              <h1 style={s.h1}>{t.introTitle}</h1>
+              <p style={s.desc}>{t.introDesc}</p>
+              <div style={{ ...s.sourceNote, marginBottom: 16 }}>{t.source}</div>
+              <div style={s.chips}>{cats.map((c) => <span key={c.id} style={s.chip}>{c.label}</span>)}</div>
+              <label style={{ ...s.label, marginTop: 14 }}>{t.cityLabel}</label>
+              <select style={s.select} value={cityName} onChange={(e) => setCityName(e.target.value)}>
+                <option value="">{t.cityPlaceholder}</option>
+                {CITIES_DATA.map(g => (
+                  <optgroup key={g.country} label={g.country}>
+                    {g.cities.map(c => <option key={c} value={c}>{c}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+              <button style={{ ...s.btnPrimary, opacity: cityName.trim() ? 1 : 0.4, cursor: cityName.trim() ? "pointer" : "default" }}
+                disabled={!cityName.trim()} onClick={() => setStep("quiz")}>
+                {t.startBtn}
+              </button>
+              {cityName.trim() && (
+                <div style={s.osmPanel}>
+                  <div style={s.osmPanelTop}>
+                    <div>
+                      <div style={s.osmPanelTitle}>{lang === "es" ? "Pre-completar desde OpenStreetMap" : "Pre-fill from OpenStreetMap"}</div>
+                      <div style={s.osmPanelSub}>{lang === "es" ? "Datos espaciales reales para 5 preguntas de movilidad activa y transporte" : "Real spatial data for 5 active mobility & transport questions"}</div>
+                    </div>
+                    <button style={{ ...s.osmBtn, opacity: osmLoading ? 0.6 : 1, cursor: osmLoading ? "default" : "pointer" }} disabled={osmLoading} onClick={fetchOSMData}>
+                      {osmLoading ? (lang === "es" ? "Consultando..." : "Querying...") : (lang === "es" ? "Analizar ciudad" : "Analyse city")}
+                    </button>
+                  </div>
+                  {osmResult && !osmResult.error && (
+                    <div style={s.osmResult}>
+                      <div style={s.osmResultTitle}>{lang === "es" ? `${osmResult.filledCount} respuestas completadas automáticamente para ${osmResult.city}` : `${osmResult.filledCount} answers auto-filled for ${osmResult.city}`}</div>
+                      <div style={s.osmResultGrid}>
+                        {osmResult.fields.map(f => (
+                          <div key={f.id} style={s.osmResultRow}>
+                            <span style={s.osmResultLabel}>{f.label}</span>
+                            <span style={s.osmResultVal}>{f.value} {f.unit}</span>
+                            <span style={{ ...s.osmResultScore, background: f.score === 3 ? "#dcf5e7" : f.score === 2 ? "#fef3c7" : "#fee2e2", color: f.score === 3 ? "#1a7a4a" : f.score === 2 ? "#8a6200" : "#9a1a1a" }}>{f.score} pts</span>
+                          </div>
+                        ))}
                       </div>
+                      <div style={s.osmAttrib}>{osmResult.isDemo ? (lang === "es" ? "Datos de demostración basados en OpenStreetMap · overpass-api.de" : "Demo data based on OpenStreetMap · overpass-api.de") : "Fuente: OpenStreetMap contributors · overpass-api.de"}</div>
+                    </div>
+                  )}
+                  {osmResult?.error && (
+                    <div style={{ ...s.osmAttrib, color: "#c94040", marginTop: 8 }}>{osmResult.errorMsg}</div>
+                  )}
+                </div>
+              )}
+              <p style={s.hint}>{t.hint(totalQ, cats.length)}</p>
+            </div>
+
+            <div style={s.tilesPanel}>
+              <div style={s.tilesPanelTitle}>{lang === "es" ? "Medidas PMUS" : "PMUS Measures"}</div>
+              <div style={s.tilesPanelSub}>{lang === "es" ? "Haz clic para más información" : "Click for more information"}</div>
+              {MEASURES_DATA.map(g => (
+                <div key={g.group} style={s.tileGroup}>
+                  <div style={{ ...s.tileGroupLabel, color: g.color }}>{g.group} · {g.label[lang]}</div>
+                  <div style={s.tileRow}>
+                    {g.measures.map(m => (
+                      <button key={m.code}
+                        style={{ ...s.tile, background: selectedTile?.code === m.code ? g.color : g.bg, borderColor: g.color + "88", color: selectedTile?.code === m.code ? "#fff" : g.color }}
+                        onClick={() => setSelectedTile(selectedTile?.code === m.code ? null : { ...m, groupColor: g.color, groupBg: g.bg, groupLight: g.light })}>
+                        {m.code}
+                      </button>
                     ))}
                   </div>
-                  <div style={s.osmAttrib}>
-                    {osmResult.isDemo
-                      ? (lang === "es" ? "Datos de demostración basados en OpenStreetMap · overpass-api.de" : "Demo data based on OpenStreetMap · overpass-api.de")
-                      : "Fuente: OpenStreetMap contributors · overpass-api.de"
-                    }
-                  </div>
                 </div>
-              )}
-              {osmResult?.error && (
-                <div style={{ ...s.osmAttrib, color: "#c94040", marginTop: 8 }}>{osmResult.errorMsg || (lang === "es" ? "No se pudo obtener datos para esta ciudad. Continúe manualmente." : "Could not fetch data for this city. Continue manually.")}</div>
-              )}
-            </div>
-          )}
-          <p style={s.hint}>{t.hint(totalQ, cats.length)}</p>
-        </div>
-
-        <div style={s.tilesPanel}>
-          <div style={s.tilesPanelTitle}>{lang === "es" ? "Medidas PMUS" : "PMUS Measures"}</div>
-          <div style={s.tilesPanelSub}>{lang === "es" ? "Haz clic para más información" : "Click for more information"}</div>
-          {MEASURES_DATA.map(g => (
-            <div key={g.group} style={s.tileGroup}>
-              <div style={{ ...s.tileGroupLabel, color: g.color }}>{g.group} · {g.label[lang]}</div>
-              <div style={s.tileRow}>
-                {g.measures.map(m => (
-                  <button key={m.code}
-                    style={{ ...s.tile, background: selectedTile?.code === m.code ? g.color : g.bg, borderColor: g.color + "88", color: selectedTile?.code === m.code ? "#fff" : g.color }}
-                    onClick={() => setSelectedTile(selectedTile?.code === m.code ? null : { ...m, groupColor: g.color, groupBg: g.bg, groupLight: g.light })}>
-                    {m.code}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {selectedTile && (
-          <div style={s.tileModal} onClick={() => setSelectedTile(null)}>
-            <div style={{ ...s.tileModalBox, borderTop: `4px solid ${selectedTile.groupColor}`, background: selectedTile.groupLight }} onClick={e => e.stopPropagation()}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                <span style={{ ...s.tileModalCode, color: selectedTile.groupColor }}>{selectedTile.code}</span>
-                <button style={s.tileModalClose} onClick={() => setSelectedTile(null)}>✕</button>
-              </div>
-              <div style={s.tileModalName}>{selectedTile.name[lang]}</div>
-              <p style={s.tileModalDesc}>{selectedTile.desc[lang]}</p>
+              ))}
             </div>
           </div>
         )}
-      </div>
-    </div>
-  );
 
-  if (step === "review") {
-    return (
-      <div style={s.page}>
-        <div style={{ ...s.card, maxWidth: 760 }}>
-          <Header lang={lang} setLang={setLang} onHelp={() => setShowOnboarding(true)} />
-          <h2 style={s.h2}>{lang === "es" ? "Revisar respuestas" : "Review your answers"}</h2>
-          <p style={{ ...s.desc2, marginBottom: 24 }}>{lang === "es" ? "Verificá tus respuestas antes de ver los resultados. Podés volver a cualquier sección para corregir." : "Check your answers before viewing results. You can go back to any section to make changes."}</p>
-
-          {cats.map((cat, ci) => (
-            <div key={cat.id} style={s.reviewCatBlock}>
-              <div style={s.reviewCatHeader}>
-                <span style={s.reviewCatLabel}>{cat.label}</span>
-                <button style={s.reviewEditBtn} onClick={() => { setCatIdx(ci); setStep("quiz"); }}>
-                  {lang === "es" ? "Editar" : "Edit"}
-                </button>
-              </div>
-              {cat.questions.map((q, qi) => {
-                const ans = answers[q.id];
-                const opt = q.options.find(o => o.score === ans);
-                const unanswered = ans === undefined;
+        {/* QUIZ */}
+        {step === "quiz" && (
+          <div style={{ ...s.card, maxWidth: 760 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+              <span style={{ color: TEAL, fontSize: 13, fontWeight: 600 }}>{cityName}</span>
+              <span style={{ color: MUTED, fontSize: 12 }}>{t.progressLabel(answered, totalQ)}</span>
+            </div>
+            <div style={s.progressBar}><div style={{ ...s.progressFill, width: `${(answered / totalQ) * 100}%` }} /></div>
+            <div style={s.tabRow}>
+              {cats.map((c, i) => {
+                const done = c.questions.every((q) => answers[q.id] !== undefined);
+                const active = i === catIdx;
                 return (
-                  <div key={q.id} style={{ ...s.reviewRow, background: unanswered ? "#fff5f5" : "#fafafa", borderColor: unanswered ? "#f5c0c0" : BORDER }}>
-                    <span style={s.reviewQNum}>{qi + 1}.</span>
-                    <span style={{ ...s.reviewQText, flex: 1 }}>{q.text}</span>
-                    <span style={{ ...s.reviewAns, color: unanswered ? "#c94040" : TEAL, background: unanswered ? "#fee2e2" : TEAL_LIGHT }}>
-                      {unanswered ? (lang === "es" ? "Sin respuesta" : "Unanswered") : opt?.label}
-                    </span>
+                  <button key={c.id} style={{ ...s.tab, ...(active ? s.tabActive : {}), ...(done && !active ? s.tabDone : {}) }} onClick={() => setCatIdx(i)}>
+                    <span style={{ fontSize: 11, fontWeight: 700 }}>{c.id.slice(0,2).toUpperCase()}</span>
+                    {done && <span style={s.checkPin}>✓</span>}
+                  </button>
+                );
+              })}
+              <span style={s.tabLabel}>{currentCat.label}</span>
+            </div>
+            <div style={{ marginBottom: 24 }}>
+              {currentCat.questions.map((q, qi) => {
+                const osmFilled = osmResult && !osmResult.error && osmResult.fields.some(f => f.id === q.id);
+                return (
+                  <div key={q.id} style={s.qBlock}>
+                    <p style={s.qText}>
+                      <span style={s.qNum}>{qi + 1}.</span> {q.text}
+                      {osmFilled && <span style={s.osmBadge}>OSM</span>}
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {q.options.map((opt) => {
+                        const sel = answers[q.id] === opt.score;
+                        return (
+                          <button key={opt.score} style={{ ...s.opt, ...(sel ? s.optSel : {}), ...(sel && osmFilled ? { borderColor: "#0a9ea0", background: "#f0fbfb", color: "#0a7a7a" } : {}) }} onClick={() => answer(q.id, opt.score)}>
+                            <span style={{ ...s.radio, ...(sel ? s.radioSel : {}), ...(sel && osmFilled ? { background: "#0a9ea0", borderColor: "#0a9ea0" } : {}) }} />
+                            <span style={{ flex: 1 }}>{opt.label}</span>
+                            <span style={{ fontSize: 11, color: sel ? (osmFilled ? "#0a9ea0" : TEAL) : MUTED, fontWeight: 600 }}>{opt.score} {t.pts}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })}
             </div>
-          ))}
-
-          <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
-            <button style={s.btnOutline} onClick={() => { setCatIdx(0); setStep("quiz"); }}>
-              {lang === "es" ? "← Volver al cuestionario" : "← Back to questionnaire"}
-            </button>
-            <button style={s.btnPrimary} onClick={() => setStep("results")}>
-              {lang === "es" ? "Confirmar y ver resultados →" : "Confirm & view results →"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (step === "results") {
-    const total = totalPct();
-    const risk = getRiskLevel(total, lang);
-    return (
-      <div style={s.page}>
-        <div style={{ ...s.card, maxWidth: 900 }}>
-          <Header lang={lang} setLang={setLang} onHelp={() => setShowOnboarding(true)} />
-          <div style={s.resultsTop}>
-            <div>
-              <span style={s.cityPill}>{cityName}</span>
-              <h2 style={s.h2}>{t.resultsTitle}</h2>
-              <p style={s.desc2}>{t.resultsSub}</p>
-              {osmResult?.isDemo && (
-                <div style={{ marginTop: 6, display: "inline-flex", alignItems: "center", gap: 6, background: "#f0fbfb", border: "1px solid #b2e4e4", borderRadius: 5, padding: "3px 10px" }}>
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#0a9ea0", flexShrink: 0, display: "inline-block" }} />
-                  <span style={{ color: "#0a6060", fontSize: 11 }}>{lang === "es" ? `${osmResult.filledCount} preguntas pre-completadas desde OpenStreetMap` : `${osmResult.filledCount} questions pre-filled from OpenStreetMap`}</span>
-                </div>
-              )}
-            </div>
-            <div style={{ textAlign: "center" }}>
-              <RadialScore pct={total} color={risk.dot} size={90} />
-              <div style={{ ...s.badge, background: risk.bg, color: risk.color }}>{t.riskPrefix}{risk.label}</div>
-              <div style={s.totalLbl}>{t.totalLabel}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <button style={s.btnOutline} onClick={reset}>{lang === "es" ? "← Inicio" : "← Home"}</button>
+              <button style={{ ...s.btnOutline, opacity: catIdx === 0 ? 0.3 : 1 }} disabled={catIdx === 0} onClick={() => setCatIdx((i) => i - 1)}>{t.prevBtn}</button>
+              <button style={{ ...s.btnSkip, marginTop: 0, width: "auto" }} onClick={skipToResults}>{lang === "es" ? "Saltear" : "Skip"}</button>
+              {catIdx < cats.length - 1
+                ? <button style={{ ...s.btnPrimary, opacity: catDone ? 1 : 0.4, cursor: catDone ? "pointer" : "default" }} disabled={!catDone} onClick={() => setCatIdx((i) => i + 1)}>{t.nextBtn}</button>
+                : <button style={{ ...s.btnPrimary, opacity: answered === totalQ ? 1 : 0.4, cursor: answered === totalQ ? "pointer" : "default" }} disabled={answered !== totalQ} onClick={() => setStep("review")}>{t.resultsBtn}</button>
+              }
             </div>
           </div>
+        )}
 
-          <div style={s.grid}>
-            {cats.map((cat) => {
-              const pct = catPct(cat);
-              const raw = catRaw(cat);
-              const r = getRiskLevel(pct, lang);
-              return (
-                <div key={cat.id} style={{ ...s.catCard, borderTop: `3px solid ${r.dot}` }}>
-                  <div style={s.catHead}>
-                    <div>
-                      
-                      <div style={s.catName}>{cat.label}</div>
-                      <div style={s.catScore}>{raw} / {cat.maxScore} {t.pts}</div>
-                      <span style={{ ...s.badgeSm, background: r.bg, color: r.color }}>{r.label}</span>
-                    </div>
-                    <RadialScore pct={pct} color={r.dot} size={68} />
-                  </div>
-                  <div style={s.sep} />
-                  {cat.questions.map((q) => {
-                    const a = q.options.find((o) => o.score === answers[q.id]);
-                    return (
-                      <div key={q.id} style={{ marginBottom: 8 }}>
-                        <span style={s.aQ}>{q.text}</span>
-                        <span style={s.aA}>{a?.label ?? "—"} <span style={{ color: MUTED, fontWeight: 400 }}>({answers[q.id] ?? 0} {t.pts})</span></span>
-                      </div>
-                    );
-                  })}
+        {/* REVIEW */}
+        {step === "review" && (
+          <div style={{ ...s.card, maxWidth: 760 }}>
+            <h2 style={s.h2}>{lang === "es" ? "Revisar respuestas" : "Review your answers"}</h2>
+            <p style={{ ...s.desc2, marginBottom: 24 }}>{lang === "es" ? "Verificá tus respuestas antes de ver los resultados. Podés volver a cualquier sección para corregir." : "Check your answers before viewing results. You can go back to any section to make changes."}</p>
+            {cats.map((cat, ci) => (
+              <div key={cat.id} style={s.reviewCatBlock}>
+                <div style={s.reviewCatHeader}>
+                  <span style={s.reviewCatLabel}>{cat.label}</span>
+                  <button style={s.reviewEditBtn} onClick={() => { setCatIdx(ci); setStep("quiz"); }}>{lang === "es" ? "Editar" : "Edit"}</button>
                 </div>
-              );
-            })}
-          </div>
-
-          <div style={s.methodNote}><strong>{lang === "es" ? "Metodología:" : "Methodology:"}</strong> {t.methodNote.replace(/^[^:]+: /, "")}</div>
-
-          <div style={{ ...s.methodNote, background: "#f0f9ff", borderColor: "#bae6fd", marginBottom: 20 }}>
-            <strong>{t.recTitle}</strong>
-            {t.rec.map((r) => (
-              <div key={r.range} style={{ marginTop: 6 }}>
-                <span style={{ fontWeight: 700, color: TEXT }}>{r.range}:</span> <span>{r.action}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* SUGGESTED MEASURES */}
-          {(() => {
-            const suggested = getSuggestedMeasures().slice(0, 6);
-            if (suggested.length === 0) return null;
-            const fieldLabel = {
-              tipos:    { es: "Tipo de intervención", en: "Intervention type" },
-              horizonte:{ es: "Horizonte", en: "Timeline" },
-              costo:    { es: "Costo económico", en: "Economic cost" },
-              ambito:   { es: "Ámbito de aplicación", en: "Area of application" },
-              ecm:      { es: "Enfoque ECM", en: "ECM framework" },
-            };
-            return (
-              <div style={{ marginBottom: 20 }}>
-                <div style={s.suggestTitle}>
-                  {lang === "es" ? "Medidas recomendadas" : "Recommended measures"}
-                </div>
-                <div style={s.suggestSub}>
-                  {lang === "es" ? "Dimensiones con puntaje inferior al 50% — Guía PMUS Argentina" : "Dimensions scoring below 50% — Argentina SUMP Guide"}
-                </div>
-                <div style={s.suggestGrid}>
-                  {suggested.map(m => {
-                    const grp = MEASURES_DATA.find(g => g.measures.some(x => x.code === m.code));
-                    return (
-                      <div key={m.code} style={{ ...s.suggestCard, borderTop: `3px solid ${grp.color}`, background: grp.light }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                          <span style={{ ...s.suggestCardCode, background: grp.color }}>{m.code}</span>
-                          <span style={s.suggestCardName}>{m.name[lang]}</span>
-                        </div>
-                        <p style={s.suggestCardDesc}>{m.desc[lang]}</p>
-                        <div style={s.suggestCardDivider} />
-                        {[
-                          { key: "tipos",    val: m.tipos?.map(t => t[lang]).join(" · ") },
-                          { key: "horizonte",val: m.horizonte?.[lang] },
-                          { key: "costo",    val: m.costo?.[lang] },
-                          { key: "ambito",   val: m.ambito?.[lang] },
-                          { key: "ecm",      val: m.ecm?.[lang] },
-                        ].map(row => row.val ? (
-                          <div key={row.key} style={s.suggestCardRow}>
-                            <span style={{ ...s.suggestCardRowLabel, color: grp.color }}>{fieldLabel[row.key][lang]}</span>
-                            <span style={s.suggestCardRowVal}>{row.val}</span>
-                          </div>
-                        ) : null)}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })()}
-
-          <div style={{ display: "flex", gap: 12 }}>
-            <button style={s.btnOutline} onClick={() => { setAnswers({}); setCatIdx(0); setStep("quiz"); }}>{t.editBtn}</button>
-            <button style={s.btnOutline} onClick={() => alert(lang === "es" ? "La descarga del informe estará disponible en la versión final." : "Report download will be available in the final version.")} >
-              {lang === "es" ? "Descargar informe" : "Download report"}
-            </button>
-            <button style={s.btnPrimary} onClick={reset}>{t.newBtn}</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={s.page}>
-      <div style={{ ...s.card, maxWidth: 760 }}>
-        <Header lang={lang} setLang={setLang} onHelp={() => setShowOnboarding(true)} />
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-          <span style={{ color: TEAL, fontSize: 13, fontWeight: 600 }}>{cityName}</span>
-          <span style={{ color: MUTED, fontSize: 12 }}>{t.progressLabel(answered, totalQ)}</span>
-        </div>
-        <div style={s.progressBar}>
-          <div style={{ ...s.progressFill, width: `${(answered / totalQ) * 100}%` }} />
-        </div>
-        <div style={s.tabRow}>
-          {cats.map((c, i) => {
-            const done = c.questions.every((q) => answers[q.id] !== undefined);
-            const active = i === catIdx;
-            return (
-              <button key={c.id} style={{ ...s.tab, ...(active ? s.tabActive : {}), ...(done && !active ? s.tabDone : {}) }} onClick={() => setCatIdx(i)}>
-                <span style={{ fontSize: 11, fontWeight: 700 }}>{c.id.slice(0,2).toUpperCase()}</span>
-                {done && <span style={s.checkPin}>✓</span>}
-              </button>
-            );
-          })}
-          <span style={s.tabLabel}>{currentCat.label}</span>
-        </div>
-
-        <div style={{ marginBottom: 24 }}>
-          {currentCat.questions.map((q, qi) => {
-            const osmFilled = osmResult && !osmResult.error && osmResult.fields.some(f => f.id === q.id);
-            return (
-            <div key={q.id} style={s.qBlock}>
-              <p style={s.qText}>
-                <span style={s.qNum}>{qi + 1}.</span> {q.text}
-                {osmFilled && <span style={s.osmBadge}>OSM</span>}
-              </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {q.options.map((opt) => {
-                  const sel = answers[q.id] === opt.score;
+                {cat.questions.map((q, qi) => {
+                  const ans = answers[q.id];
+                  const opt = q.options.find(o => o.score === ans);
+                  const unanswered = ans === undefined;
                   return (
-                    <button key={opt.score} style={{ ...s.opt, ...(sel ? s.optSel : {}), ...(sel && osmFilled ? { borderColor: "#0a9ea0", background: "#f0fbfb", color: "#0a7a7a" } : {}) }} onClick={() => answer(q.id, opt.score)}>
-                      <span style={{ ...s.radio, ...(sel ? s.radioSel : {}), ...(sel && osmFilled ? { background: "#0a9ea0", borderColor: "#0a9ea0" } : {}) }} />
-                      <span style={{ flex: 1 }}>{opt.label}</span>
-                      <span style={{ fontSize: 11, color: sel ? (osmFilled ? "#0a9ea0" : TEAL) : MUTED, fontWeight: 600 }}>{opt.score} {t.pts}</span>
-                    </button>
+                    <div key={q.id} style={{ ...s.reviewRow, background: unanswered ? "#fff5f5" : "#fafafa", borderColor: unanswered ? "#f5c0c0" : BORDER }}>
+                      <span style={s.reviewQNum}>{qi + 1}.</span>
+                      <span style={{ ...s.reviewQText, flex: 1 }}>{q.text}</span>
+                      <span style={{ ...s.reviewAns, color: unanswered ? "#c94040" : TEAL, background: unanswered ? "#fee2e2" : TEAL_LIGHT }}>
+                        {unanswered ? (lang === "es" ? "Sin respuesta" : "Unanswered") : opt?.label}
+                      </span>
+                    </div>
                   );
                 })}
               </div>
+            ))}
+            <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
+              <button style={s.btnOutline} onClick={() => { setCatIdx(0); setStep("quiz"); }}>{lang === "es" ? "← Volver al cuestionario" : "← Back to questionnaire"}</button>
+              <button style={s.btnPrimary} onClick={() => setStep("results")}>{lang === "es" ? "Confirmar y ver resultados →" : "Confirm & view results →"}</button>
             </div>
-            );
-          })}
-        </div>
+          </div>
+        )}
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <button style={s.btnRestart} onClick={reset}>
-            {lang === "es" ? "← Inicio" : "← Home"}
-          </button>
-          <button style={{ ...s.btnOutline, opacity: catIdx === 0 ? 0.3 : 1 }} disabled={catIdx === 0} onClick={() => setCatIdx((i) => i - 1)}>{t.prevBtn}</button>
-          <button style={{ ...s.btnSkip, marginTop: 0, width: "auto" }} onClick={skipToResults}>{lang === "es" ? "Saltear" : "Skip"}</button>
-          {catIdx < cats.length - 1
-            ? <button style={{ ...s.btnPrimary, opacity: catDone ? 1 : 0.4, cursor: catDone ? "pointer" : "default" }} disabled={!catDone} onClick={() => setCatIdx((i) => i + 1)}>{t.nextBtn}</button>
-            : <button style={{ ...s.btnPrimary, opacity: answered === totalQ ? 1 : 0.4, cursor: answered === totalQ ? "pointer" : "default" }} disabled={answered !== totalQ} onClick={() => setStep("review")}>{t.resultsBtn}</button>
-          }
+        {/* RESULTS */}
+        {step === "results" && (() => {
+          const total = totalPct();
+          const risk = getRiskLevel(total, lang);
+          const fieldLabel = {
+            tipos: { es: "Tipo de intervención", en: "Intervention type" },
+            horizonte: { es: "Horizonte", en: "Timeline" },
+            costo: { es: "Costo económico", en: "Economic cost" },
+            ambito: { es: "Ámbito de aplicación", en: "Area of application" },
+            ecm: { es: "Enfoque ECM", en: "ECM framework" },
+          };
+          return (
+            <div style={{ ...s.card, maxWidth: 900 }}>
+              <div style={s.resultsTop}>
+                <div>
+                  <span style={s.cityPill}>{cityName}</span>
+                  <h2 style={s.h2}>{t.resultsTitle}</h2>
+                  <p style={s.desc2}>{t.resultsSub}</p>
+                  {osmResult?.isDemo && (
+                    <div style={{ marginTop: 6, display: "inline-flex", alignItems: "center", gap: 6, background: "#f0fbfb", border: "1px solid #b2e4e4", borderRadius: 5, padding: "3px 10px" }}>
+                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#0a9ea0", flexShrink: 0, display: "inline-block" }} />
+                      <span style={{ color: "#0a6060", fontSize: 11 }}>{lang === "es" ? `${osmResult.filledCount} preguntas pre-completadas desde OpenStreetMap` : `${osmResult.filledCount} questions pre-filled from OpenStreetMap`}</span>
+                    </div>
+                  )}
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <RadialScore pct={total} color={risk.dot} size={90} />
+                  <div style={{ ...s.badge, background: risk.bg, color: risk.color }}>{t.riskPrefix}{risk.label}</div>
+                  <div style={s.totalLbl}>{t.totalLabel}</div>
+                </div>
+              </div>
+              <div style={s.grid}>
+                {cats.map((cat) => {
+                  const pct = catPct(cat);
+                  const raw = catRaw(cat);
+                  const r = getRiskLevel(pct, lang);
+                  return (
+                    <div key={cat.id} style={{ ...s.catCard, borderTop: `3px solid ${r.dot}` }}>
+                      <div style={s.catHead}>
+                        <div>
+                          <div style={s.catName}>{cat.label}</div>
+                          <div style={s.catScore}>{raw} / {cat.maxScore} {t.pts}</div>
+                          <span style={{ ...s.badgeSm, background: r.bg, color: r.color }}>{r.label}</span>
+                        </div>
+                        <RadialScore pct={pct} color={r.dot} size={68} />
+                      </div>
+                      <div style={s.sep} />
+                      {cat.questions.map((q) => {
+                        const a = q.options.find((o) => o.score === answers[q.id]);
+                        return (
+                          <div key={q.id} style={{ marginBottom: 8 }}>
+                            <span style={s.aQ}>{q.text}</span>
+                            <span style={s.aA}>{a?.label ?? "—"} <span style={{ color: MUTED, fontWeight: 400 }}>({answers[q.id] ?? 0} {t.pts})</span></span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={s.methodNote}><strong>{lang === "es" ? "Metodología:" : "Methodology:"}</strong> {t.methodNote.replace(/^[^:]+: /, "")}</div>
+              <div style={{ ...s.methodNote, background: "#f0f9ff", borderColor: "#bae6fd", marginBottom: 20 }}>
+                <strong>{t.recTitle}</strong>
+                {t.rec.map((r) => (
+                  <div key={r.range} style={{ marginTop: 6 }}>
+                    <span style={{ fontWeight: 700, color: TEXT }}>{r.range}:</span> <span>{r.action}</span>
+                  </div>
+                ))}
+              </div>
+              {(() => {
+                const suggested = getSuggestedMeasures().slice(0, 6);
+                if (suggested.length === 0) return null;
+                return (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={s.suggestTitle}>{lang === "es" ? "Medidas recomendadas" : "Recommended measures"}</div>
+                    <div style={s.suggestSub}>{lang === "es" ? "Dimensiones con puntaje inferior al 50% — Guía PMUS Argentina" : "Dimensions scoring below 50% — Argentina SUMP Guide"}</div>
+                    <div style={s.suggestGrid}>
+                      {suggested.map(m => {
+                        const grp = MEASURES_DATA.find(g => g.measures.some(x => x.code === m.code));
+                        return (
+                          <div key={m.code} style={{ ...s.suggestCard, borderTop: `3px solid ${grp.color}`, background: grp.light }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                              <span style={{ ...s.suggestCardCode, background: grp.color }}>{m.code}</span>
+                              <span style={s.suggestCardName}>{m.name[lang]}</span>
+                            </div>
+                            <p style={s.suggestCardDesc}>{m.desc[lang]}</p>
+                            <div style={s.suggestCardDivider} />
+                            {[
+                              { key: "tipos", val: m.tipos?.map(t => t[lang]).join(" · ") },
+                              { key: "horizonte", val: m.horizonte?.[lang] },
+                              { key: "costo", val: m.costo?.[lang] },
+                              { key: "ambito", val: m.ambito?.[lang] },
+                              { key: "ecm", val: m.ecm?.[lang] },
+                            ].map(row => row.val ? (
+                              <div key={row.key} style={s.suggestCardRow}>
+                                <span style={{ ...s.suggestCardRowLabel, color: grp.color }}>{fieldLabel[row.key][lang]}</span>
+                                <span style={s.suggestCardRowVal}>{row.val}</span>
+                              </div>
+                            ) : null)}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+              <div style={{ display: "flex", gap: 12 }}>
+                <button style={s.btnOutline} onClick={() => { setAnswers({}); setCatIdx(0); setStep("quiz"); }}>{t.editBtn}</button>
+                <button style={s.btnOutline} onClick={() => alert(lang === "es" ? "La descarga del informe estará disponible en la versión final." : "Report download will be available in the final version.")}>{lang === "es" ? "Descargar informe" : "Download report"}</button>
+                <button style={s.btnPrimary} onClick={reset}>{t.newBtn}</button>
+              </div>
+            </div>
+          );
+        })()}
+
+      </section>
+
+      {/* CONTEXT SECTION */}
+      <section style={s.contextSection}>
+        <div style={s.contextInner}>
+          <div style={s.contextTag}>{lang === "es" ? "Sobre la herramienta" : "About the tool"}</div>
+          <h2 style={s.sectionTitle}>{lang === "es" ? "Basado en la Guía PMUS Argentina" : "Based on the PMUS Argentina Guide"}</h2>
+          <p style={s.contextText}>{lang === "es" ? "Esta herramienta digitaliza el autodiagnóstico del Plan de Movilidad Urbana Sostenible (PMUS) desarrollado por Asociación Sustentar junto al Ministerio de Transporte de la Nación en 2023. Permite a municipios y autoridades de transporte evaluar su situación actual, identificar brechas y priorizar intervenciones de manera estructurada." : "This tool digitises the self-assessment of the Sustainable Urban Mobility Plan (SUMP) developed by Asociación Sustentar together with Argentina's Ministry of Transport in 2023. It allows municipalities and transport authorities to assess their current situation, identify gaps and prioritise interventions in a structured way."}</p>
+          <a href="https://www.asociacionsustentar.org" target="_blank" rel="noreferrer" style={s.contextLink}>{lang === "es" ? "Ver guía completa →" : "View full guide →"}</a>
         </div>
-      </div>
+      </section>
+
+      {/* FEEDBACK SECTION */}
+      <section style={s.feedbackSection}>
+        <div style={s.feedbackInner}>
+          <div style={s.contextTag}>{lang === "es" ? "Queremos saber" : "We want to know"}</div>
+          <h2 style={s.sectionTitle}>{lang === "es" ? "¿Usaste esta herramienta con tu ciudad?" : "Did you use this tool with your city?"}</h2>
+          <p style={s.feedbackSub}>{lang === "es" ? "Tu experiencia y sugerencias nos ayudan a mejorar esta herramienta para más ciudades latinoamericanas. Dejanos un comentario." : "Your experience and suggestions help us improve this tool for more Latin American cities. Leave us a comment."}</p>
+          {fbSubmitted ? (
+            <div style={s.feedbackSuccess}>{lang === "es" ? "Mensaje enviado. Muchas gracias." : "Message sent. Thank you very much."}</div>
+          ) : (
+            <div style={s.feedbackForm}>
+              <div style={s.feedbackRow}>
+                <input style={s.feedbackInput} placeholder={lang === "es" ? "Ciudad" : "City"} value={fbCity} onChange={e => setFbCity(e.target.value)} />
+                <input style={s.feedbackInput} placeholder={lang === "es" ? "Nombre o institución" : "Name or institution"} value={fbName} onChange={e => setFbName(e.target.value)} />
+              </div>
+              <textarea style={s.feedbackTextarea} placeholder={lang === "es" ? "Comentarios, sugerencias o preguntas sobre la herramienta..." : "Comments, suggestions or questions about the tool..."} value={fbMessage} onChange={e => setFbMessage(e.target.value)} rows={4} />
+              <button style={{ ...s.btnPrimary, maxWidth: 220, opacity: fbMessage.trim() ? 1 : 0.4, cursor: fbMessage.trim() ? "pointer" : "default" }} disabled={!fbMessage.trim()} onClick={submitFeedback}>
+                {lang === "es" ? "Enviar comentario" : "Submit feedback"}
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* FOOTER */}
+      <footer style={s.siteFooter}>
+        <div style={s.footerInner}>
+          <img src={LOGO_URL} alt="Sustentar" style={{ height: 30, objectFit: "contain", filter: "brightness(0) invert(1)", opacity: 0.9 }} />
+          <p style={s.footerText}>{lang === "es" ? "En nombre de Asociación Sustentar · Buenos Aires, Argentina" : "On behalf of Asociación Sustentar · Buenos Aires, Argentina"}</p>
+          <a href="https://www.asociacionsustentar.org" target="_blank" rel="noreferrer" style={s.footerLink}>asociacionsustentar.org</a>
+        </div>
+      </footer>
+
     </div>
   );
 }
 
 const s = {
-  page: { minHeight: "100vh", width: "100%", background: BG, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "32px 40px 48px", fontFamily: "'Helvetica Neue', Arial, sans-serif", boxSizing: "border-box" },
+  // ── LAYOUT ───────────────────────────────────────────────────
+  siteWrapper: { minHeight: "100vh", background: BG, fontFamily: "'Helvetica Neue', Arial, sans-serif" },
+
+  // ── STICKY HEADER ────────────────────────────────────────────
+  stickyHeader: { position: "sticky", top: 0, zIndex: 50, background: "rgba(255,255,255,0.95)", backdropFilter: "blur(8px)", borderBottom: `1px solid ${BORDER}`, boxShadow: "0 1px 0 rgba(42,122,106,0.06)" },
+  headerInner: { maxWidth: 1200, margin: "0 auto", padding: "0 40px", height: 58, display: "flex", alignItems: "center", gap: 14 },
+  navCityBadge: { background: TEAL_LIGHT, color: TEAL, border: `1px solid ${TEAL_MID}`, borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600 },
+  navRestartBtn: { background: "transparent", color: MUTED, border: `1px solid ${BORDER}`, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" },
+  helpBtn: { width: 28, height: 28, borderRadius: "50%", border: `1px solid ${BORDER}`, background: WHITE, color: MUTED, fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" },
+  langToggle: { display: "flex", border: `1px solid ${BORDER}`, borderRadius: 6, overflow: "hidden" },
+  langBtn: { background: WHITE, color: MUTED, border: "none", padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", letterSpacing: "0.05em" },
+  langBtnActive: { background: TEAL, color: WHITE },
+
+  // ── HERO ─────────────────────────────────────────────────────
+  heroSection: { background: WHITE, borderBottom: `1px solid ${BORDER}`, padding: "72px 40px 64px" },
+  heroInner: { maxWidth: 700, margin: "0 auto", textAlign: "center" },
+  heroBadge: { display: "inline-block", background: TEAL_LIGHT, color: TEAL, border: `1px solid ${TEAL_MID}`, borderRadius: 20, padding: "5px 14px", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 20 },
+  heroTitle: { color: TEXT, fontSize: 40, fontWeight: 800, lineHeight: 1.2, margin: "0 0 20px", letterSpacing: "-0.02em" },
+  heroSub: { color: MUTED, fontSize: 16, lineHeight: 1.7, margin: "0 0 36px", maxWidth: 560, marginLeft: "auto", marginRight: "auto" },
+  heroStats: { display: "flex", alignItems: "center", justifyContent: "center", gap: 0, marginBottom: 36, background: TEAL_LIGHT, borderRadius: 12, padding: "16px 32px", border: `1px solid ${TEAL_MID}`, display: "inline-flex" },
+  heroStat: { display: "flex", flexDirection: "column", alignItems: "center", padding: "0 24px" },
+  heroStatNum: { color: TEAL, fontSize: 28, fontWeight: 800, lineHeight: 1 },
+  heroStatLabel: { color: MUTED, fontSize: 11, marginTop: 4, letterSpacing: "0.05em" },
+  heroStatDiv: { width: 1, height: 36, background: TEAL_MID },
+  heroScrollBtn: { display: "inline-block", background: TEAL, color: WHITE, borderRadius: 8, padding: "12px 28px", fontWeight: 600, fontSize: 14, textDecoration: "none", letterSpacing: "0.01em" },
+
+  // ── TOOL SECTION ─────────────────────────────────────────────
+  toolSection: { padding: "48px 40px 64px", display: "flex", justifyContent: "center", alignItems: "flex-start" },
+
+  // ── CARD ─────────────────────────────────────────────────────
   card: { background: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "36px 40px", maxWidth: 600, width: "100%", boxShadow: "0 2px 20px rgba(42,122,106,0.08)" },
   header: { display: "flex", alignItems: "center", gap: 14, marginBottom: 28, paddingBottom: 20, borderBottom: `1px solid ${BORDER}` },
   logoImg: { height: 30, objectFit: "contain" },
   headerDiv: { width: 1, height: 22, background: BORDER },
   headerSub: { color: MUTED, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 500 },
-  langToggle: { display: "flex", border: `1px solid ${BORDER}`, borderRadius: 6, overflow: "hidden" },
-  langBtn: { background: WHITE, color: MUTED, border: "none", padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", letterSpacing: "0.05em" },
-  langBtnActive: { background: TEAL, color: WHITE },
-  helpBtn: { width: 26, height: 26, borderRadius: "50%", border: `1px solid ${BORDER}`, background: WHITE, color: MUTED, fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit", lineHeight: 1 },
   banner: { display: "flex", alignItems: "center", gap: 8, background: TEAL_LIGHT, border: `1px solid ${TEAL_MID}`, borderRadius: 6, padding: "7px 12px", marginBottom: 12, color: TEAL, fontSize: 12, fontWeight: 500 },
   bannerDot: { display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: ACCENT, flexShrink: 0 },
   sourceNote: { color: MUTED, fontSize: 11, lineHeight: 1.5, fontStyle: "italic" },
@@ -1193,10 +1270,27 @@ const s = {
   aA: { display: "block", color: TEXT, fontSize: 11, fontWeight: 600, marginTop: 1 },
   methodNote: { background: TEAL_LIGHT, border: `1px solid ${TEAL_MID}`, borderRadius: 7, padding: "12px 16px", color: MUTED, fontSize: 12, lineHeight: 1.6, marginBottom: 16 },
 
-  // INTRO TWO-COLUMN
+  // ── INTRO TWO-COLUMN ─────────────────────────────────────────
   introWrap: { display: "flex", gap: 24, alignItems: "flex-start", maxWidth: 1100, width: "100%", position: "relative" },
 
-  // REVIEW SCREEN
+  // ── TILES PANEL ──────────────────────────────────────────────
+  tilesPanel: { width: 220, flexShrink: 0, background: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "18px 16px", boxShadow: "0 2px 12px rgba(42,122,106,0.07)" },
+  tilesPanelTitle: { color: TEXT, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 },
+  tilesPanelSub: { color: MUTED, fontSize: 11, marginBottom: 14 },
+  tileGroup: { marginBottom: 12 },
+  tileGroupLabel: { fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 5 },
+  tileRow: { display: "flex", flexWrap: "wrap", gap: 4 },
+  tile: { border: "1.5px solid", borderRadius: 5, padding: "3px 6px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
+
+  // ── TILE MODAL ───────────────────────────────────────────────
+  tileModal: { position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.25)" },
+  tileModalBox: { background: WHITE, borderRadius: 10, padding: "20px 24px", maxWidth: 340, width: "90%", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" },
+  tileModalCode: { fontSize: 22, fontWeight: 800, letterSpacing: "0.04em" },
+  tileModalClose: { background: "transparent", border: "none", color: MUTED, fontSize: 16, cursor: "pointer", padding: 0 },
+  tileModalName: { color: TEXT, fontSize: 14, fontWeight: 700, marginBottom: 8 },
+  tileModalDesc: { color: MUTED, fontSize: 13, lineHeight: 1.6, margin: 0 },
+
+  // ── REVIEW ───────────────────────────────────────────────────
   reviewCatBlock: { marginBottom: 20 },
   reviewCatHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, paddingBottom: 6, borderBottom: `1px solid ${BORDER}` },
   reviewCatLabel: { color: TEXT, fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" },
@@ -1205,6 +1299,21 @@ const s = {
   reviewQNum: { color: MUTED, fontSize: 11, fontWeight: 600, flexShrink: 0, paddingTop: 2 },
   reviewQText: { color: TEXT, fontSize: 12, lineHeight: 1.5 },
   reviewAns: { fontSize: 11, fontWeight: 600, borderRadius: 10, padding: "2px 10px", flexShrink: 0, whiteSpace: "nowrap" },
+
+  // ── SUGGESTED MEASURES ───────────────────────────────────────
+  suggestTitle: { color: TEXT, fontSize: 13, fontWeight: 700, marginBottom: 4 },
+  suggestSub: { color: MUTED, fontSize: 11, marginBottom: 12 },
+  suggestGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
+  suggestCard: { background: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "14px 16px" },
+  suggestCardCode: { display: "inline-block", color: WHITE, fontSize: 11, fontWeight: 800, borderRadius: 5, padding: "2px 8px", letterSpacing: "0.06em", flexShrink: 0 },
+  suggestCardName: { color: TEXT, fontSize: 12, fontWeight: 700, lineHeight: 1.3 },
+  suggestCardDesc: { color: MUTED, fontSize: 11, lineHeight: 1.5, margin: "0 0 10px" },
+  suggestCardDivider: { height: 1, background: BORDER, marginBottom: 8 },
+  suggestCardRow: { display: "flex", gap: 8, marginBottom: 5, alignItems: "flex-start" },
+  suggestCardRowLabel: { fontSize: 10, fontWeight: 700, minWidth: 110, flexShrink: 0, paddingTop: 1 },
+  suggestCardRowVal: { color: TEXT, fontSize: 10, lineHeight: 1.4 },
+
+  // ── OSM PANEL ────────────────────────────────────────────────
   osmPanel: { marginTop: 16, background: "#f0fbfb", border: "1px solid #b2e4e4", borderRadius: 8, padding: "14px 16px" },
   osmPanelTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 },
   osmPanelTitle: { color: "#0a6060", fontSize: 12, fontWeight: 700, marginBottom: 2 },
@@ -1219,6 +1328,8 @@ const s = {
   osmResultScore: { fontSize: 10, fontWeight: 700, borderRadius: 10, padding: "2px 7px" },
   osmAttrib: { color: MUTED, fontSize: 10, marginTop: 8, fontStyle: "italic" },
   osmBadge: { display: "inline-block", background: "#0a9ea0", color: WHITE, fontSize: 9, fontWeight: 700, borderRadius: 4, padding: "1px 5px", marginLeft: 6, verticalAlign: "middle", letterSpacing: "0.04em" },
+
+  // ── ONBOARDING ───────────────────────────────────────────────
   onboardOverlay: { position: "fixed", inset: 0, zIndex: 200, background: "rgba(15,30,25,0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" },
   onboardBox: { background: WHITE, borderRadius: 14, padding: "40px 48px", maxWidth: 980, width: "100%", boxShadow: "0 24px 64px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto" },
   onboardHeader: { display: "flex", alignItems: "center", gap: 14, marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${BORDER}` },
@@ -1240,33 +1351,27 @@ const s = {
   onboardCardRowDesc: { color: MUTED, fontSize: 11, lineHeight: 1.4 },
   onboardBtn: { width: "100%", background: TEAL, color: WHITE, border: "none", borderRadius: 8, padding: "13px 24px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.03em" },
 
-  // TILES PANEL
-  tilesPanel: { width: 220, flexShrink: 0, background: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "18px 16px", boxShadow: "0 2px 12px rgba(42,122,106,0.07)" },
-  tilesPanelTitle: { color: TEXT, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 },
-  tilesPanelSub: { color: MUTED, fontSize: 11, marginBottom: 14 },
-  tileGroup: { marginBottom: 12 },
-  tileGroupLabel: { fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 5 },
-  tileRow: { display: "flex", flexWrap: "wrap", gap: 4 },
-  tile: { border: "1.5px solid", borderRadius: 5, padding: "3px 6px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", transition: "all 0.18s ease" },
+  // ── CONTEXT SECTION ──────────────────────────────────────────
+  contextSection: { background: WHITE, borderTop: `1px solid ${BORDER}`, padding: "72px 40px" },
+  contextInner: { maxWidth: 680, margin: "0 auto" },
+  contextTag: { display: "inline-block", background: TEAL_LIGHT, color: TEAL, border: `1px solid ${TEAL_MID}`, borderRadius: 20, padding: "4px 12px", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16 },
+  sectionTitle: { color: TEXT, fontSize: 26, fontWeight: 700, margin: "0 0 16px", letterSpacing: "-0.01em" },
+  contextText: { color: MUTED, fontSize: 15, lineHeight: 1.8, margin: "0 0 24px" },
+  contextLink: { color: TEAL, fontSize: 14, fontWeight: 600, textDecoration: "none", borderBottom: `1px solid ${TEAL_MID}`, paddingBottom: 2 },
 
-  // TILE MODAL (floating popover)
-  tileModal: { position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.25)" },
-  tileModalBox: { background: WHITE, borderRadius: 10, padding: "20px 24px", maxWidth: 340, width: "90%", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" },
-  tileModalCode: { fontSize: 22, fontWeight: 800, letterSpacing: "0.04em" },
-  tileModalClose: { background: "transparent", border: "none", color: MUTED, fontSize: 16, cursor: "pointer", padding: 0 },
-  tileModalName: { color: TEXT, fontSize: 14, fontWeight: 700, marginBottom: 8 },
-  tileModalDesc: { color: MUTED, fontSize: 13, lineHeight: 1.6, margin: 0 },
+  // ── FEEDBACK SECTION ─────────────────────────────────────────
+  feedbackSection: { background: BG, borderTop: `1px solid ${BORDER}`, padding: "72px 40px" },
+  feedbackInner: { maxWidth: 600, margin: "0 auto" },
+  feedbackSub: { color: MUTED, fontSize: 14, lineHeight: 1.7, margin: "0 0 28px" },
+  feedbackForm: { display: "flex", flexDirection: "column", gap: 12 },
+  feedbackRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
+  feedbackInput: { border: `1px solid ${BORDER}`, borderRadius: 7, padding: "10px 14px", color: TEXT, fontSize: 13, outline: "none", background: WHITE, fontFamily: "inherit" },
+  feedbackTextarea: { border: `1px solid ${BORDER}`, borderRadius: 7, padding: "10px 14px", color: TEXT, fontSize: 13, outline: "none", background: WHITE, fontFamily: "inherit", resize: "vertical" },
+  feedbackSuccess: { background: TEAL_LIGHT, border: `1px solid ${TEAL_MID}`, borderRadius: 8, padding: "14px 18px", color: TEAL, fontSize: 14, fontWeight: 500 },
 
-  // SUGGESTED MEASURES (results page)
-  suggestTitle: { color: TEXT, fontSize: 13, fontWeight: 700, marginBottom: 4 },
-  suggestSub: { color: MUTED, fontSize: 11, marginBottom: 12 },
-  suggestGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
-  suggestCard: { background: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "14px 16px" },
-  suggestCardCode: { display: "inline-block", color: WHITE, fontSize: 11, fontWeight: 800, borderRadius: 5, padding: "2px 8px", letterSpacing: "0.06em", flexShrink: 0 },
-  suggestCardName: { color: TEXT, fontSize: 12, fontWeight: 700, lineHeight: 1.3 },
-  suggestCardDesc: { color: MUTED, fontSize: 11, lineHeight: 1.5, margin: "0 0 10px" },
-  suggestCardDivider: { height: 1, background: BORDER, marginBottom: 8 },
-  suggestCardRow: { display: "flex", gap: 8, marginBottom: 5, alignItems: "flex-start" },
-  suggestCardRowLabel: { fontSize: 10, fontWeight: 700, minWidth: 110, flexShrink: 0, paddingTop: 1 },
-  suggestCardRowVal: { color: TEXT, fontSize: 10, lineHeight: 1.4 },
+  // ── FOOTER ───────────────────────────────────────────────────
+  siteFooter: { background: TEAL, padding: "48px 40px" },
+  footerInner: { maxWidth: 900, margin: "0 auto", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" },
+  footerText: { color: "rgba(255,255,255,0.75)", fontSize: 13, margin: 0 },
+  footerLink: { color: "rgba(255,255,255,0.6)", fontSize: 12, textDecoration: "none", borderBottom: "1px solid rgba(255,255,255,0.3)", paddingBottom: 2 },
 };
