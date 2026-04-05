@@ -501,6 +501,7 @@ export default function App() {
   const [step, setStep] = useState("intro");
   const [userRole, setUserRole] = useState(null);
   const [citySize, setCitySize] = useState(null);
+  const [expandedCats, setExpandedCats] = useState({});
   const [catIdx, setCatIdx] = useState(0);
   const [answers, setAnswers] = useState({});
   const [cityName, setCityName] = useState("");
@@ -1151,16 +1152,27 @@ export default function App() {
                         </div>
                         <RadialScore pct={pct} color={r.dot} size={68} />
                       </div>
-                      <div style={s.sep} />
-                      {cat.questions.map((q) => {
-                        const a = q.options.find((o) => o.score === answers[q.id]);
-                        return (
-                          <div key={q.id} style={{ marginBottom: 8 }}>
-                            <span style={s.aQ}>{q.text}</span>
-                            <span style={s.aA}>{a?.label ?? "—"} <span style={{ color: MUTED, fontWeight: 400 }}>({answers[q.id] ?? 0} {t.pts})</span></span>
-                          </div>
-                        );
-                      })}
+                      <button
+                        style={s.catToggle}
+                        onClick={() => setExpandedCats(prev => ({ ...prev, [cat.id]: !prev[cat.id] }))}>
+                        {expandedCats[cat.id]
+                          ? (lang === "es" ? "▲ Ocultar respuestas" : "▲ Hide answers")
+                          : (lang === "es" ? "▼ Ver respuestas" : "▼ Show answers")}
+                      </button>
+                      {expandedCats[cat.id] && (
+                        <>
+                          <div style={s.sep} />
+                          {cat.questions.map((q) => {
+                            const a = q.options.find((o) => o.score === answers[q.id]);
+                            return (
+                              <div key={q.id} style={{ marginBottom: 8 }}>
+                                <span style={s.aQ}>{q.text}</span>
+                                <span style={s.aA}>{a?.label ?? "—"} <span style={{ color: MUTED, fontWeight: 400 }}>({answers[q.id] ?? 0} {t.pts})</span></span>
+                              </div>
+                            );
+                          })}
+                        </>
+                      )}
                     </div>
                   );
                 })}
@@ -1351,6 +1363,7 @@ const s = {
   grid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 20 },
   catCard: { background: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "16px" },
   catHead: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" },
+  catToggle: { marginTop: 10, background: "transparent", border: "none", color: MUTED, fontSize: 11, cursor: "pointer", fontFamily: "inherit", padding: "4px 0", textAlign: "left" },
   catName: { color: TEXT, fontSize: 13, fontWeight: 700, margin: "4px 0 2px" },
   catScore: { color: MUTED, fontSize: 11, marginBottom: 4 },
   sep: { height: 1, background: BORDER, margin: "10px 0" },
