@@ -141,6 +141,19 @@ def save_diagnostic(payload: DiagnosticPayload):
     }).execute()
     return {"id": res.data[0]["id"], "message": "Diagnostic saved"}
 
+class FeedbackPayload(BaseModel):
+    city: Optional[str] = None
+    name: Optional[str] = None
+    message: str
+
+@app.post("/api/feedback")
+def submit_feedback(payload: FeedbackPayload):
+    supabase.table("feedback").insert({
+        "city": payload.city,
+        "name": payload.name,
+        "message": payload.message
+    }).execute()
+    return {"message": "Feedback received"}
 
 @app.get("/api/health")
 def health():
