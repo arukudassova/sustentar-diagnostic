@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { supabase } from "./supabase.js";
 
 // Load Lato from Google Fonts
 if (typeof document !== "undefined" && !document.getElementById("sustentar-fonts")) {
@@ -532,25 +533,73 @@ export default function App() {
   const [apiLoading, setApiLoading] = useState(true);
   const [apiError, setApiError] = useState(false);
 
-  // Fetch all data on mount and when lang changes
+  // Fetch all data from Supabase on mount and when lang changes
   useEffect(() => {
     async function fetchAll() {
       setApiLoading(true);
-      setApiError(false);
       try {
-        const [citiesRes, questionsRes, measuresRes] = await Promise.all([
-          fetch(`${API_URL}/api/cities`),
-          fetch(`${API_URL}/api/questions?lang=${lang}`),
-          fetch(`${API_URL}/api/measures?lang=${lang}`),
-        ]);
-        const [cities, questions, measures] = await Promise.all([
-          citiesRes.json(), questionsRes.json(), measuresRes.json()
-        ]);
-        setApiCities(cities);
-        setApiQuestions(questions);
-        setApiMeasures(measures);
+        // Cities
+        const { data: citiesRaw } = await supabase
+          .from("cities").select("name, country").order("country").order("name");
+        const grouped = {};
+        citiesRaw.forEach(({ name, country }) => {
+          if (!grouped[country]) grouped[country] = [];
+          grouped[country].push(name);
+        });
+        setApiCities(Object.entries(grouped).map(([country, cities]) => ({ country, cities })));
+
+        // Questions with options
+        const { data: cats } = await supabase
+          .from("categories").select("*").order("sort_order");
+        const { data: qs } = await supabase
+          .from("questions").select("*").order("sort_order");
+        const { data: opts } = await supabase
+          .from("question_options").select("*").order("sort_order");
+
+        const optsMap = {};
+        opts.forEach(o => {
+          if (!optsMap[o.question_id]) optsMap[o.question_id] = [];
+          optsMap[o.question_id].push({ label: o[`label_${lang}`], score: o.score });
+        });
+        const qsMap = {};
+        qs.forEach(q => {
+          if (!qsMap[q.category_slug]) qsMap[q.category_slug] = [];
+          qsMap[q.category_slug].push({ id: q.question_id, text: q[`text_${lang}`], options: optsMap[q.question_id] || [] });
+        });
+        setApiQuestions(cats.map(c => ({
+          id: c.slug, label: c[`label_${lang}`], maxScore: c.max_score,
+          questions: qsMap[c.slug] || []
+        })));
+
+        // Measures
+        const { data: groups } = await supabase
+          .from("measure_groups").select("*").order("sort_order");
+        const { data: measures } = await supabase
+          .from("measures").select("*");
+        const measuresMap = {};
+        measures.forEach(m => {
+          if (!measuresMap[m.group_letter]) measuresMap[m.group_letter] = [];
+          measuresMap[m.group_letter].push({
+            code: m.code,
+            name: { es: m.name_es, en: m.name_en },
+            desc: { es: m.desc_es, en: m.desc_en },
+            tipos: m[`tipos_${lang}`],
+            horizonte: { es: m.horizonte_es, en: m.horizonte_en },
+            costo: { es: m.costo_es, en: m.costo_en },
+            ambito: { es: m.ambito_es, en: m.ambito_en },
+            ecm: { es: m.ecm_es, en: m.ecm_en },
+            diagCats: m.diag_cats,
+          });
+        });
+        setApiMeasures(groups.map(g => ({
+          group: g.group_letter,
+          label: { es: g.label_es, en: g.label_en },
+          color: g.color, bg: g.bg, light: g.light,
+          measures: measuresMap[g.group_letter] || []
+        })));
+
       } catch (e) {
-        console.warn("API unavailable, falling back to local data");
+        console.warn("Supabase fetch failed:", e);
         setApiError(true);
       }
       setApiLoading(false);
@@ -558,7 +607,6 @@ export default function App() {
     fetchAll();
   }, [lang]);
 
-  // Use API data if available, otherwise fall back to hardcoded
   const CITIES_DATA = apiCities || CITY_GROUPS;
   const CATEGORIES_DATA = apiQuestions || CATEGORIES[lang];
   const MEASURES_DATA = apiMeasures || MEASURE_GROUPS;
@@ -575,21 +623,24 @@ export default function App() {
 
     let osmData = null;
 
-    // Try API first
+    // Try Supabase first
     try {
-      const res = await fetch(`${API_URL}/api/osm/${encodeURIComponent(base)}`);
-      if (res.ok) {
-        const d = await res.json();
+      const { data } = await supabase
+        .from("osm_demo_data")
+        .select("*")
+        .eq("city_name", base)
+        .single();
+      if (data) {
         osmData = {
-          cycleways: d.cycleways,
-          bikeParking: d.bike_parking,
-          bikeShare: d.bike_share,
-          pedestrian: d.pedestrian,
-          busStops: d.bus_stops
+          cycleways: data.cycleways,
+          bikeParking: data.bike_parking,
+          bikeShare: data.bike_share,
+          pedestrian: data.pedestrian,
+          busStops: data.bus_stops
         };
       }
     } catch (e) {
-      console.warn("API OSM fetch failed, using local demo data");
+      console.warn("Supabase OSM fetch failed, using local demo data");
     }
 
     // Fallback to hardcoded demo data
@@ -677,11 +728,9 @@ export default function App() {
 
   function submitFeedback() {
     if (!fbMessage.trim()) return;
-    fetch(`${API_URL}/api/feedback`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ city: fbCity, name: fbName, message: fbMessage })
-    }).catch(() => {});
+    supabase.from("feedback").insert({
+      city: fbCity, name: fbName, message: fbMessage
+    }).then(() => {}).catch(() => {});
     setFbSubmitted(true);
   }
 
