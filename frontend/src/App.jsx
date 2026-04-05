@@ -499,6 +499,8 @@ function Header({ lang, setLang, onHelp }) {
 export default function App() {
   const [lang, setLang] = useState("es");
   const [step, setStep] = useState("intro");
+  const [userRole, setUserRole] = useState(null);
+  const [citySize, setCitySize] = useState(null);
   const [catIdx, setCatIdx] = useState(0);
   const [answers, setAnswers] = useState({});
   const [cityName, setCityName] = useState("");
@@ -671,7 +673,7 @@ export default function App() {
     setFbSubmitted(true);
   }
 
-    function reset() { setStep("intro"); setAnswers({}); setCatIdx(0); setCityName(""); setSelectedTile(null); }
+    function reset() { setStep("intro"); setAnswers({}); setCatIdx(0); setCityName(""); setSelectedTile(null); setUserRole(null); setCitySize(null); setFbSubmitted(false); }
 
   function getSuggestedMeasures() {
     const lowCats = cats.filter((cat) => {
@@ -874,7 +876,7 @@ export default function App() {
                 ))}
               </select>
               <button style={{ ...s.btnPrimary, opacity: cityName.trim() ? 1 : 0.4, cursor: cityName.trim() ? "pointer" : "default" }}
-                disabled={!cityName.trim()} onClick={() => setStep("quiz")}>
+                disabled={!cityName.trim()} onClick={() => setStep("role")}>
                 {t.startBtn}
               </button>
               {cityName.trim() && (
@@ -928,6 +930,65 @@ export default function App() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+
+        {/* ROLE SELECTION */}
+        {step === "role" && (
+          <div style={{ ...s.card, maxWidth: 560 }}>
+            <div style={s.stepProgress}>{lang === "es" ? "Paso 1 de 2" : "Step 1 of 2"}</div>
+            <h2 style={s.h2}>{lang === "es" ? "¿Quién realiza este diagnóstico?" : "Who is completing this assessment?"}</h2>
+            <p style={{ ...s.desc, marginBottom: 24 }}>{lang === "es" ? "Solo para registro — no afecta el puntaje." : "For our records only — does not affect scoring."}</p>
+            <div style={s.roleGrid}>
+              {[
+                { id: "municipio", es: "Municipio / Secretaría de Transporte", en: "Municipality / Transport Department", sub: { es: "Gobierno local responsable de la movilidad urbana", en: "Local government responsible for urban mobility" } },
+                { id: "organismo", es: "Organismo provincial o nacional", en: "Provincial or national body", sub: { es: "Entidad pública que evalúa ciudades bajo su jurisdicción", en: "Public entity evaluating cities under its jurisdiction" } },
+                { id: "osc", es: "Organización de la sociedad civil / Academia", en: "Civil society organisation / Academia", sub: { es: "ONG, consultora o institución de investigación", en: "NGO, consultancy or research institution" } },
+              ].map(r => (
+                <button key={r.id}
+                  style={{ ...s.roleCard, ...(userRole === r.id ? s.roleCardActive : {}) }}
+                  onClick={() => setUserRole(r.id)}>
+                  <div style={s.roleCardTitle}>{r[lang]}</div>
+                  <div style={s.roleCardSub}>{r.sub[lang]}</div>
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
+              <button style={s.btnOutline} onClick={() => setStep("intro")}>{lang === "es" ? "← Volver" : "← Back"}</button>
+              <button style={{ ...s.btnPrimary, width: "auto", padding: "10px 28px", opacity: userRole ? 1 : 0.4, cursor: userRole ? "pointer" : "default" }} disabled={!userRole} onClick={() => setStep("citysize")}>
+                {lang === "es" ? "Siguiente →" : "Next →"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* CITY SIZE SELECTION */}
+        {step === "citysize" && (
+          <div style={{ ...s.card, maxWidth: 560 }}>
+            <div style={s.stepProgress}>{lang === "es" ? "Paso 2 de 2" : "Step 2 of 2"}</div>
+            <h2 style={s.h2}>{lang === "es" ? "¿Cuál es el tamaño de la ciudad?" : "What is the size of the city?"}</h2>
+            <p style={{ ...s.desc, marginBottom: 24 }}>{lang === "es" ? "Esto adapta los umbrales de evaluación según la Guía PMUS." : "This adapts the assessment thresholds according to the SUMP Guide."}</p>
+            <div style={s.roleGrid}>
+              {[
+                { id: "grande", es: "Gran aglomerado", en: "Large agglomeration", sub: { es: "Más de 500.000 habitantes", en: "More than 500,000 inhabitants" } },
+                { id: "intermedia", es: "Ciudad intermedia", en: "Mid-size city", sub: { es: "Entre 50.000 y 500.000 habitantes", en: "Between 50,000 and 500,000 inhabitants" } },
+                { id: "pequena", es: "Localidad pequeña", en: "Small town", sub: { es: "Menos de 50.000 habitantes", en: "Less than 50,000 inhabitants" } },
+              ].map(r => (
+                <button key={r.id}
+                  style={{ ...s.roleCard, ...(citySize === r.id ? s.roleCardActive : {}) }}
+                  onClick={() => setCitySize(r.id)}>
+                  <div style={s.roleCardTitle}>{r[lang]}</div>
+                  <div style={s.roleCardSub}>{r.sub[lang]}</div>
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
+              <button style={s.btnOutline} onClick={() => setStep("role")}>{lang === "es" ? "← Volver" : "← Back"}</button>
+              <button style={{ ...s.btnPrimary, width: "auto", padding: "10px 28px", opacity: citySize ? 1 : 0.4, cursor: citySize ? "pointer" : "default" }} disabled={!citySize} onClick={() => setStep("quiz")}>
+                {lang === "es" ? "Iniciar diagnóstico →" : "Start assessment →"}
+              </button>
             </div>
           </div>
         )}
@@ -1188,6 +1249,13 @@ export default function App() {
 }
 
 const s = {
+
+  stepProgress: { color: MUTED, fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 },
+  roleGrid: { display: "flex", flexDirection: "column", gap: 10 },
+  roleCard: { background: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "16px 20px", cursor: "pointer", textAlign: "left", fontFamily: "inherit" },
+  roleCardActive: { background: TEAL_LIGHT, borderColor: TEAL },
+  roleCardTitle: { color: TEXT, fontSize: 14, fontWeight: 600, marginBottom: 3 },
+  roleCardSub: { color: MUTED, fontSize: 12, lineHeight: 1.5 },
   // ── LAYOUT ───────────────────────────────────────────────────
   siteWrapper: { minHeight: "100vh", background: BG, fontFamily: "'Helvetica Neue', Arial, sans-serif" },
 
