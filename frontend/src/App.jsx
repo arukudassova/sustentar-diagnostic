@@ -1044,8 +1044,28 @@ export default function App() {
               <button style={{ ...s.btnOutline, opacity: catIdx === 0 ? 0.3 : 1 }} disabled={catIdx === 0} onClick={() => setCatIdx((i) => i - 1)}>{t.prevBtn}</button>
               <button style={{ ...s.btnSkip, marginTop: 0, width: "auto" }} onClick={skipToResults}>{lang === "es" ? "Saltear" : "Skip"}</button>
               {catIdx < cats.length - 1
-                ? <button style={{ ...s.btnPrimary, opacity: catDone ? 1 : 0.4, cursor: catDone ? "pointer" : "default" }} disabled={!catDone} onClick={() => setCatIdx((i) => i + 1)}>{t.nextBtn}</button>
-                : <button style={{ ...s.btnPrimary, opacity: answered === totalQ ? 1 : 0.4, cursor: answered === totalQ ? "pointer" : "default" }} disabled={answered !== totalQ} onClick={() => setStep("review")}>{t.resultsBtn}</button>
+                ? <button style={{ ...s.btnPrimary, opacity: 1, cursor: "pointer" }} onClick={() => {
+                    const unanswered = currentCat.questions.filter(q => answers[q.id] === undefined).length;
+                    if (unanswered > 0) {
+                      const msg = lang === "es"
+                        ? `Tenés ${unanswered} pregunta${unanswered > 1 ? "s" : ""} sin responder en esta sección. ¿Continuar de todas formas?`
+                        : `You have ${unanswered} unanswered question${unanswered > 1 ? "s" : ""} in this section. Continue anyway?`;
+                      if (window.confirm(msg)) setCatIdx((i) => i + 1);
+                    } else {
+                      setCatIdx((i) => i + 1);
+                    }
+                  }}>{t.nextBtn}</button>
+                : <button style={{ ...s.btnPrimary, opacity: 1, cursor: "pointer" }} onClick={() => {
+                    const unanswered = cats.reduce((sum, cat) => sum + cat.questions.filter(q => answers[q.id] === undefined).length, 0);
+                    if (unanswered > 0) {
+                      const msg = lang === "es"
+                        ? `Tenés ${unanswered} pregunta${unanswered > 1 ? "s" : ""} sin responder. ¿Ver resultados de todas formas?`
+                        : `You have ${unanswered} unanswered question${unanswered > 1 ? "s" : ""}. View results anyway?`;
+                      if (window.confirm(msg)) setStep("review");
+                    } else {
+                      setStep("review");
+                    }
+                  }}>{t.resultsBtn}</button>
               }
             </div>
           </div>
