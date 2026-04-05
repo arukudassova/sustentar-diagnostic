@@ -4,12 +4,14 @@ from supabase import create_client, Client
 from pydantic import BaseModel
 from typing import Optional
 import os
+import httpx
 from dotenv import load_dotenv
 
 load_dotenv()
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+GEOAPIFY_KEY = os.environ.get("GEOAPIFY_KEY")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -17,129 +19,86 @@ app = FastAPI(title="Sustentar Diagnostic API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten in production
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# ── CITIES ─────────────────────────────────────────────────────
-@app.get("/api/cities")
-def get_cities():
-    res = supabase.table("cities").select("*").order("country, name").execute()
-    # Group by country
-    grouped = {}
-    for city in res.data:
-        country = city["country"]
-        if country not in grouped:
-            grouped[country] = []
-        grouped[country].append(city["name"])
-    return [{"country": k, "cities": v} for k, v in grouped.items()]
+@app.get("/api/health")
+def health():
+    return {"status": "ok"}
 
 
-# ── QUESTIONS ──────────────────────────────────────────────────
-@app.get("/api/questions")
-def get_questions(lang: str = "es"):
-    cats = supabase.table("categories").select("*").order("sort_order").execute()
-    questions = supabase.table("questions").select("*").order("sort_order").execute()
-    options = supabase.table("question_options").select("*").order("sort_order").execute()
+@app.get("/api/spatial/{city_name}")
+async def get_spatial_data(city_name: str):
+    # 1. Check Supabase cache first
+    cached = supabase.table("osm_cache").select("*").eq("city_name", city_name).execute()
+    if cached.data:
+        print(f"Cache hit for {city_name}")
+        return cached.data[0]
 
-    # Build options map
-    opts_map = {}
-    for opt in options.data:
-        qid = opt["question_id"]
-        if qid not in opts_map:
-            opts_map[qid] = []
-        opts_map[qid].append({
-            "label": opt[f"label_{lang}"],
-            "score": opt["score"]
-        })
+    print(f"Cache miss for {city_name}, querying Geoapify...")
 
-    # Build questions map by category
-    qs_map = {}
-    for q in questions.data:
-        slug = q["category_slug"]
-        if slug not in qs_map:
-            qs_map[slug] = []
-        qs_map[slug].append({
-            "id": q["question_id"],
-            "text": q[f"text_{lang}"],
-            "options": opts_map.get(q["question_id"], [])
-        })
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        # 2. Get city place_id
+        geo_res = await client.get(
+            "https://api.geoapify.com/v1/geocode/search",
+            params={
+                "text": city_name,
+                "limit": 1,
+                "apiKey": GEOAPIFY_KEY,
+            }
+        )
+        geo_data = geo_res.json()
 
-    # Build categories
-    result = []
-    for cat in cats.data:
-        result.append({
-            "id": cat["slug"],
-            "label": cat[f"label_{lang}"],
-            "maxScore": cat["max_score"],
-            "questions": qs_map.get(cat["slug"], [])
-        })
+        if not geo_data.get("features"):
+            raise HTTPException(status_code=404, detail=f"City not found: {city_name}")
 
-    return result
+        place_id = geo_data["features"][0]["properties"].get("place_id")
+        if not place_id:
+            raise HTTPException(status_code=404, detail=f"No place ID for: {city_name}")
 
+        print(f"place_id: {place_id}")
 
-# ── MEASURES ───────────────────────────────────────────────────
-@app.get("/api/measures")
-def get_measures(lang: str = "es"):
-    groups = supabase.table("measure_groups").select("*").order("sort_order").execute()
-    measures = supabase.table("measures").select("*").execute()
+        # 3. Query correct Geoapify categories
+        # See: https://apidocs.geoapify.com/docs/places/#categories
+        categories = {
+            "cycleways":    "mobility.bicycle",
+            "bike_parking": "service.vehicle.bicycle.parking",
+            "bike_share":   "service.vehicle.bicycle.rental",
+            "pedestrian":   "pedestrian",
+            "bus_stops":    "public_transport.bus",
+        }
 
-    measures_map = {}
-    for m in measures.data:
-        g = m["group_letter"]
-        if g not in measures_map:
-            measures_map[g] = []
-        measures_map[g].append({
-            "code": m["code"],
-            "name": m[f"name_{lang}"],
-            "desc": m[f"desc_{lang}"],
-            "tipos": m[f"tipos_{lang}"],
-            "horizonte": m[f"horizonte_{lang}"],
-            "costo": m[f"costo_{lang}"],
-            "ambito": m[f"ambito_{lang}"],
-            "ecm": m[f"ecm_{lang}"],
-            "diagCats": m["diag_cats"]
-        })
+        counts = {}
+        for key, category in categories.items():
+            res = await client.get(
+                "https://api.geoapify.com/v2/places",
+                params={
+                    "categories": category,
+                    "filter": f"place:{place_id}",
+                    "limit": 500,
+                    "apiKey": GEOAPIFY_KEY,
+                }
+            )
+            data = res.json()
+            count = len(data.get("features", []))
+            counts[key] = count
+            print(f"{key} ({category}): {count}")
 
-    result = []
-    for g in groups.data:
-        result.append({
-            "group": g["group_letter"],
-            "label": g[f"label_{lang}"],
-            "color": g["color"],
-            "bg": g["bg"],
-            "light": g["light"],
-            "measures": measures_map.get(g["group_letter"], [])
-        })
+    # 4. Upsert to Supabase (handles duplicate key gracefully)
+    row = {
+        "city_name":    city_name,
+        "cycleways":    counts["cycleways"],
+        "bike_parking": counts["bike_parking"],
+        "bike_share":   counts["bike_share"],
+        "pedestrian":   counts["pedestrian"],
+        "bus_stops":    counts["bus_stops"],
+    }
+    supabase.table("osm_cache").upsert(row, on_conflict="city_name").execute()
+    return row
 
-    return result
-
-
-# ── OSM DATA ───────────────────────────────────────────────────
-@app.get("/api/osm/{city_name}")
-def get_osm_data(city_name: str):
-    res = supabase.table("osm_demo_data").select("*").eq("city_name", city_name).execute()
-    if not res.data:
-        raise HTTPException(status_code=404, detail=f"No OSM data for {city_name}")
-    return res.data[0]
-
-
-# ── SAVE DIAGNOSTIC ────────────────────────────────────────────
-class DiagnosticPayload(BaseModel):
-    city_name: str
-    answers: dict
-    scores: dict
-
-@app.post("/api/diagnostics")
-def save_diagnostic(payload: DiagnosticPayload):
-    res = supabase.table("diagnostics").insert({
-        "city_name": payload.city_name,
-        "answers": payload.answers,
-        "scores": payload.scores
-    }).execute()
-    return {"id": res.data[0]["id"], "message": "Diagnostic saved"}
 
 class FeedbackPayload(BaseModel):
     city: Optional[str] = None
@@ -154,7 +113,3 @@ def submit_feedback(payload: FeedbackPayload):
         "message": payload.message
     }).execute()
     return {"message": "Feedback received"}
-
-@app.get("/api/health")
-def health():
-    return {"status": "ok"}
