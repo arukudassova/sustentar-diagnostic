@@ -1,5 +1,15 @@
 import { useState, useEffect } from "react";
 
+// Load Lato from Google Fonts
+if (typeof document !== "undefined" && !document.getElementById("sustentar-fonts")) {
+  const link = document.createElement("link");
+  link.id = "sustentar-fonts";
+  link.rel = "stylesheet";
+  link.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;500;600;700;900&display=swap";
+  document.head.appendChild(link);
+}
+
+
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 
@@ -9,8 +19,8 @@ const TEAL = "#2a7a6a";
 const TEAL_LIGHT = "#e8f5f2";
 const TEAL_MID = "#c2e0da";
 const ACCENT = "#4aab93";
-const TEXT = "#1a2e28";
-const MUTED = "#6b8c84";
+const TEXT = "#2d2926";
+const MUTED = "#7a756f";
 const BORDER = "#d4e8e3";
 const BG = "#f7faf9";
 const WHITE = "#ffffff";
@@ -502,6 +512,7 @@ export default function App() {
   const [userRole, setUserRole] = useState(null);
   const [citySize, setCitySize] = useState(null);
   const [expandedCats, setExpandedCats] = useState({});
+  const [introTab, setIntroTab] = useState("tool");
   const [catIdx, setCatIdx] = useState(0);
   const [answers, setAnswers] = useState({});
   const [cityName, setCityName] = useState("");
@@ -637,7 +648,7 @@ export default function App() {
     setAnswers({ ...demoRemainder, ...newAnswers });
     setOsmResult({ filledCount: fields.length, fields, city: base, isDemo: true });
     setOsmLoading(false);
-    setStep("results");
+    setStep("quiz");
   }
 
   const t = UI[lang];
@@ -697,17 +708,7 @@ export default function App() {
   }
 
   function skipToResults() {
-    // Realistic demo: varied scores simulating a mid-size Argentine city
-    const presets = {
-      n1:3, n2:3, n3:0, n4:3, n5:0, n6:0, n7:0,         // Normativa: partial
-      p1:0, p2:0, p3:3, p4:3, p5:0, p6:3, p7:0, p8:0, p9:0, p10:0,  // Planificación: fragmented
-      ma1:0, ma2:0, ma3:1, ma4:3, ma5:0, ma6:0, ma7:3, ma8:0,        // Movilidad activa: low
-      tp1:3, tp2:2, tp3:3, tp4:1, tp5:0, tp6:0, tp7:2, tp8:3, tp9:0, tp10:3, // Transporte: moderate
-      tec1:0, tec2:0, tec3:3, tec4:0, tec5:0,            // Tecnología: low
-      sv1:0, sv2:3, sv3:2, sv4:3, sv5:0, sv6:3, sv7:3, sv8:2, sv9:0, sv10:2, sv11:2, sv12:0, // Seg. vial: mixed
-    };
-    setAnswers(presets);
-    setStep("results");
+    setStep("review");
   }
 
   const ONBOARDING = {
@@ -860,77 +861,99 @@ export default function App() {
 
         {/* INTRO */}
         {step === "intro" && (
-          <div style={s.introWrap}>
+          <div style={{ maxWidth: 680, width: "100%" }}>
             <div style={s.card}>
               <div style={s.banner}><span style={s.bannerDot} />{t.banner}</div>
               <h1 style={s.h1}>{t.introTitle}</h1>
               <p style={s.desc}>{t.introDesc}</p>
-              <div style={{ ...s.sourceNote, marginBottom: 16 }}>{t.source}</div>
-              <div style={s.chips}>{cats.map((c) => <span key={c.id} style={s.chip}>{c.label}</span>)}</div>
-              <label style={{ ...s.label, marginTop: 14 }}>{t.cityLabel}</label>
-              <select style={s.select} value={cityName} onChange={(e) => setCityName(e.target.value)}>
-                <option value="">{t.cityPlaceholder}</option>
-                {CITIES_DATA.map(g => (
-                  <optgroup key={g.country} label={g.country}>
-                    {g.cities.map(c => <option key={c} value={c}>{c}</option>)}
-                  </optgroup>
+              <div style={{ ...s.sourceNote, marginBottom: 20 }}>{t.source}</div>
+
+              {/* TABS */}
+              <div style={s.introTabBar}>
+                {[
+                  { id: "tool", es: "Sobre la herramienta", en: "About the tool" },
+                  { id: "measures", es: "Medidas PMUS", en: "PMUS Measures" },
+                ].map(tab => (
+                  <button key={tab.id}
+                    style={{ ...s.introTabBtn, ...(introTab === tab.id ? s.introTabBtnActive : {}) }}
+                    onClick={() => setIntroTab(tab.id)}>
+                    {tab[lang]}
+                  </button>
                 ))}
-              </select>
-              <button style={{ ...s.btnPrimary, opacity: cityName.trim() ? 1 : 0.4, cursor: cityName.trim() ? "pointer" : "default" }}
-                disabled={!cityName.trim()} onClick={() => setStep("role")}>
-                {t.startBtn}
-              </button>
-              {cityName.trim() && (
-                <div style={s.osmPanel}>
-                  <div style={s.osmPanelTop}>
-                    <div>
-                      <div style={s.osmPanelTitle}>{lang === "es" ? "Pre-completar desde OpenStreetMap" : "Pre-fill from OpenStreetMap"}</div>
-                      <div style={s.osmPanelSub}>{lang === "es" ? "Datos espaciales reales para 5 preguntas de movilidad activa y transporte" : "Real spatial data for 5 active mobility & transport questions"}</div>
-                    </div>
-                    <button style={{ ...s.osmBtn, opacity: osmLoading ? 0.6 : 1, cursor: osmLoading ? "default" : "pointer" }} disabled={osmLoading} onClick={fetchOSMData}>
-                      {osmLoading ? (lang === "es" ? "Consultando..." : "Querying...") : (lang === "es" ? "Analizar ciudad" : "Analyse city")}
-                    </button>
-                  </div>
-                  {osmResult && !osmResult.error && (
-                    <div style={s.osmResult}>
-                      <div style={s.osmResultTitle}>{lang === "es" ? `${osmResult.filledCount} respuestas completadas automáticamente para ${osmResult.city}` : `${osmResult.filledCount} answers auto-filled for ${osmResult.city}`}</div>
-                      <div style={s.osmResultGrid}>
-                        {osmResult.fields.map(f => (
-                          <div key={f.id} style={s.osmResultRow}>
-                            <span style={s.osmResultLabel}>{f.label}</span>
-                            <span style={s.osmResultVal}>{f.value} {f.unit}</span>
-                            <span style={{ ...s.osmResultScore, background: f.score === 3 ? "#dcf5e7" : f.score === 2 ? "#fef3c7" : "#fee2e2", color: f.score === 3 ? "#1a7a4a" : f.score === 2 ? "#8a6200" : "#9a1a1a" }}>{f.score} pts</span>
-                          </div>
-                        ))}
+              </div>
+
+              {/* TAB: ABOUT THE TOOL */}
+              {introTab === "tool" && (
+                <div style={s.introTabContent}>
+                  <div style={s.chips}>{cats.map((c) => <span key={c.id} style={s.chip}>{c.label}</span>)}</div>
+                  <label style={{ ...s.label, marginTop: 4 }}>{t.cityLabel}</label>
+                  <select style={s.select} value={cityName} onChange={(e) => setCityName(e.target.value)}>
+                    <option value="">{t.cityPlaceholder}</option>
+                    {CITIES_DATA.map(g => (
+                      <optgroup key={g.country} label={g.country}>
+                        {g.cities.map(c => <option key={c} value={c}>{c}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <button style={{ ...s.btnPrimary, opacity: cityName.trim() ? 1 : 0.4, cursor: cityName.trim() ? "pointer" : "default" }}
+                    disabled={!cityName.trim()} onClick={() => setStep("role")}>
+                    {t.startBtn}
+                  </button>
+                  {cityName.trim() && (
+                    <div style={s.osmPanel}>
+                      <div style={s.osmPanelTop}>
+                        <div>
+                          <div style={s.osmPanelTitle}>{lang === "es" ? "Pre-completar desde OpenStreetMap" : "Pre-fill from OpenStreetMap"}</div>
+                          <div style={s.osmPanelSub}>{lang === "es" ? "Datos espaciales reales para 5 preguntas de movilidad activa y transporte" : "Real spatial data for 5 active mobility & transport questions"}</div>
+                        </div>
+                        <button style={{ ...s.osmBtn, opacity: osmLoading ? 0.6 : 1, cursor: osmLoading ? "default" : "pointer" }} disabled={osmLoading} onClick={fetchOSMData}>
+                          {osmLoading ? (lang === "es" ? "Consultando..." : "Querying...") : (lang === "es" ? "Analizar ciudad" : "Analyse city")}
+                        </button>
                       </div>
-                      <div style={s.osmAttrib}>{osmResult.isDemo ? (lang === "es" ? "Datos de demostración basados en OpenStreetMap · overpass-api.de" : "Demo data based on OpenStreetMap · overpass-api.de") : "Fuente: OpenStreetMap contributors · overpass-api.de"}</div>
+                      {osmResult && !osmResult.error && (
+                        <div style={s.osmResult}>
+                          <div style={s.osmResultTitle}>{lang === "es" ? `${osmResult.filledCount} respuestas completadas automáticamente para ${osmResult.city}` : `${osmResult.filledCount} answers auto-filled for ${osmResult.city}`}</div>
+                          <div style={s.osmResultGrid}>
+                            {osmResult.fields.map(f => (
+                              <div key={f.id} style={s.osmResultRow}>
+                                <span style={s.osmResultLabel}>{f.label}</span>
+                                <span style={s.osmResultVal}>{f.value} {f.unit}</span>
+                                <span style={{ ...s.osmResultScore, background: f.score === 3 ? "#dcf5e7" : f.score === 2 ? "#fef3c7" : "#fee2e2", color: f.score === 3 ? "#1a7a4a" : f.score === 2 ? "#8a6200" : "#9a1a1a" }}>{f.score} pts</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div style={s.osmAttrib}>{osmResult.isDemo ? (lang === "es" ? "Datos de demostración basados en OpenStreetMap · overpass-api.de" : "Demo data based on OpenStreetMap · overpass-api.de") : "Fuente: OpenStreetMap contributors · overpass-api.de"}</div>
+                        </div>
+                      )}
+                      {osmResult?.error && (
+                        <div style={{ ...s.osmAttrib, color: "#c94040", marginTop: 8 }}>{osmResult.errorMsg}</div>
+                      )}
                     </div>
                   )}
-                  {osmResult?.error && (
-                    <div style={{ ...s.osmAttrib, color: "#c94040", marginTop: 8 }}>{osmResult.errorMsg}</div>
-                  )}
+                  <p style={s.hint}>{t.hint(totalQ, cats.length)}</p>
                 </div>
               )}
-              <p style={s.hint}>{t.hint(totalQ, cats.length)}</p>
-            </div>
 
-            <div style={s.tilesPanel}>
-              <div style={s.tilesPanelTitle}>{lang === "es" ? "Medidas PMUS" : "PMUS Measures"}</div>
-              <div style={s.tilesPanelSub}>{lang === "es" ? "Haz clic para más información" : "Click for more information"}</div>
-              {MEASURES_DATA.map(g => (
-                <div key={g.group} style={s.tileGroup}>
-                  <div style={{ ...s.tileGroupLabel, color: g.color }}>{g.group} · {g.label[lang]}</div>
-                  <div style={s.tileRow}>
-                    {g.measures.map(m => (
-                      <button key={m.code}
-                        style={{ ...s.tile, background: selectedTile?.code === m.code ? g.color : g.bg, borderColor: g.color + "88", color: selectedTile?.code === m.code ? "#fff" : g.color }}
-                        onClick={() => setSelectedTile(selectedTile?.code === m.code ? null : { ...m, groupColor: g.color, groupBg: g.bg, groupLight: g.light })}>
-                        {m.code}
-                      </button>
-                    ))}
-                  </div>
+              {/* TAB: PMUS MEASURES */}
+              {introTab === "measures" && (
+                <div style={s.introTabContent}>
+                  <p style={{ ...s.desc, marginBottom: 16 }}>{lang === "es" ? "Las 33 medidas de la Guía PMUS organizadas en 7 grupos temáticos. Haz clic en cualquier código para ver su descripción." : "The 33 SUMP Guide measures in 7 thematic groups. Click any code to see its description."}</p>
+                  {MEASURES_DATA.map(g => (
+                    <div key={g.group} style={s.tileGroup}>
+                      <div style={{ ...s.tileGroupLabel, color: g.color }}>{g.group} · {g.label[lang]}</div>
+                      <div style={s.tileRow}>
+                        {g.measures.map(m => (
+                          <button key={m.code}
+                            style={{ ...s.tile, background: selectedTile?.code === m.code ? g.color : g.bg, borderColor: g.color + "88", color: selectedTile?.code === m.code ? "#fff" : g.color }}
+                            onClick={() => setSelectedTile(selectedTile?.code === m.code ? null : { ...m, groupColor: g.color, groupBg: g.bg, groupLight: g.light })}>
+                            {m.code}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           </div>
         )}
@@ -1043,7 +1066,7 @@ export default function App() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <button style={s.btnOutline} onClick={reset}>{lang === "es" ? "← Inicio" : "← Home"}</button>
               <button style={{ ...s.btnOutline, opacity: catIdx === 0 ? 0.3 : 1 }} disabled={catIdx === 0} onClick={() => setCatIdx((i) => i - 1)}>{t.prevBtn}</button>
-              <button style={{ ...s.btnSkip, marginTop: 0, width: "auto" }} onClick={skipToResults}>{lang === "es" ? "Saltear" : "Skip"}</button>
+              <button style={{ ...s.btnSkip, marginTop: 0, width: "auto" }} onClick={() => setStep("review")}>{lang === "es" ? "Finalizar →" : "Finalise →"}</button>
               {catIdx < cats.length - 1
                 ? <button style={{ ...s.btnPrimary, opacity: 1, cursor: "pointer" }} onClick={() => {
                     const unanswered = currentCat.questions.filter(q => answers[q.id] === undefined).length;
@@ -1288,8 +1311,13 @@ const s = {
   roleCardActive: { background: TEAL_LIGHT, borderColor: TEAL },
   roleCardTitle: { color: TEXT, fontSize: 14, fontWeight: 600, marginBottom: 3 },
   roleCardSub: { color: MUTED, fontSize: 12, lineHeight: 1.5 },
+
+  introTabBar: { display: "flex", gap: 4, borderBottom: `1px solid ${BORDER}`, marginBottom: 20, marginTop: 4 },
+  introTabBtn: { background: "transparent", border: "none", borderBottom: "2px solid transparent", padding: "8px 16px", fontSize: 12, fontWeight: 500, color: MUTED, cursor: "pointer", fontFamily: "inherit", marginBottom: -1 },
+  introTabBtnActive: { color: TEAL, borderBottomColor: TEAL, fontWeight: 700 },
+  introTabContent: { },
   // ── LAYOUT ───────────────────────────────────────────────────
-  siteWrapper: { minHeight: "100vh", background: BG, fontFamily: "'Helvetica Neue', Arial, sans-serif" },
+  siteWrapper: { minHeight: "100vh", background: BG, fontFamily: "'Lato', 'Helvetica Neue', Arial, sans-serif" },
 
   // ── STICKY HEADER ────────────────────────────────────────────
   stickyHeader: { position: "sticky", top: 0, zIndex: 50, background: "rgba(255,255,255,0.95)", backdropFilter: "blur(8px)", borderBottom: `1px solid ${BORDER}`, boxShadow: "0 1px 0 rgba(42,122,106,0.06)" },
@@ -1305,17 +1333,17 @@ const s = {
   heroSection: { background: WHITE, borderBottom: `1px solid ${BORDER}`, padding: "72px 40px 64px" },
   heroInner: { maxWidth: 700, margin: "0 auto", textAlign: "center" },
   heroBadge: { display: "inline-block", background: TEAL_LIGHT, color: TEAL, border: `1px solid ${TEAL_MID}`, borderRadius: 20, padding: "5px 14px", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 20 },
-  heroTitle: { color: TEXT, fontSize: 40, fontWeight: 800, lineHeight: 1.2, margin: "0 0 20px", letterSpacing: "-0.02em" },
-  heroSub: { color: MUTED, fontSize: 16, lineHeight: 1.7, margin: "0 0 36px", maxWidth: 560, marginLeft: "auto", marginRight: "auto" },
+  heroTitle: { color: TEXT, fontSize: 30, fontWeight: 800, lineHeight: 1.2, margin: "0 0 20px", letterSpacing: "-0.02em" },
+  heroSub: { color: MUTED, fontSize: 13, lineHeight: 1.7, margin: "0 0 36px", maxWidth: 560, marginLeft: "auto", marginRight: "auto" },
   heroStats: { display: "flex", alignItems: "center", justifyContent: "center", gap: 0, marginBottom: 36, background: TEAL_LIGHT, borderRadius: 12, padding: "16px 32px", border: `1px solid ${TEAL_MID}`, display: "inline-flex" },
   heroStat: { display: "flex", flexDirection: "column", alignItems: "center", padding: "0 24px" },
-  heroStatNum: { color: TEAL, fontSize: 28, fontWeight: 800, lineHeight: 1 },
+  heroStatNum: { color: TEAL, fontSize: 22, fontWeight: 800, lineHeight: 1 },
   heroStatLabel: { color: MUTED, fontSize: 11, marginTop: 4, letterSpacing: "0.05em" },
   heroStatDiv: { width: 1, height: 36, background: TEAL_MID },
   heroScrollBtn: { display: "inline-block", background: TEAL, color: WHITE, borderRadius: 8, padding: "12px 28px", fontWeight: 600, fontSize: 14, textDecoration: "none", letterSpacing: "0.01em" },
 
   // ── TOOL SECTION ─────────────────────────────────────────────
-  toolSection: { padding: "48px 40px 64px", display: "flex", justifyContent: "center", alignItems: "flex-start" },
+  toolSection: { padding: "48px 40px 64px", display: "flex", flexDirection: "column", alignItems: "center" },
 
   // ── CARD ─────────────────────────────────────────────────────
   card: { background: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "36px 40px", maxWidth: 600, width: "100%", boxShadow: "0 2px 20px rgba(42,122,106,0.08)" },
@@ -1326,16 +1354,16 @@ const s = {
   banner: { display: "flex", alignItems: "center", gap: 8, background: TEAL_LIGHT, border: `1px solid ${TEAL_MID}`, borderRadius: 6, padding: "7px 12px", marginBottom: 12, color: TEAL, fontSize: 12, fontWeight: 500 },
   bannerDot: { display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: ACCENT, flexShrink: 0 },
   sourceNote: { color: MUTED, fontSize: 11, lineHeight: 1.5, fontStyle: "italic" },
-  h1: { color: TEXT, fontSize: 21, fontWeight: 700, margin: "0 0 12px", lineHeight: 1.35 },
-  h2: { color: TEXT, fontSize: 20, fontWeight: 700, margin: "6px 0 4px" },
-  desc: { color: MUTED, fontSize: 14, lineHeight: 1.7, margin: "0 0 12px" },
-  desc2: { color: MUTED, fontSize: 13, margin: 0 },
+  h1: { color: TEXT, fontSize: 17, fontWeight: 700, margin: "0 0 12px", lineHeight: 1.35 },
+  h2: { color: TEXT, fontSize: 16, fontWeight: 700, margin: "6px 0 4px" },
+  desc: { color: MUTED, fontSize: 12, lineHeight: 1.7, margin: "0 0 12px" },
+  desc2: { color: MUTED, fontSize: 11, margin: 0 },
   chips: { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 24 },
   chip: { background: TEAL_LIGHT, color: TEAL, border: `1px solid ${TEAL_MID}`, borderRadius: 20, padding: "5px 12px", fontSize: 12, fontWeight: 500 },
   label: { display: "block", color: TEXT, fontSize: 12, fontWeight: 600, marginBottom: 6 },
   input: { width: "100%", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "10px 14px", color: TEXT, fontSize: 14, outline: "none", boxSizing: "border-box", background: WHITE, fontFamily: "inherit", marginBottom: 20 },
   select: { width: "100%", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "10px 14px", color: TEXT, fontSize: 14, outline: "none", boxSizing: "border-box", background: WHITE, fontFamily: "inherit", marginBottom: 20, cursor: "pointer", appearance: "auto" },
-  btnPrimary: { display: "block", width: "100%", background: TEAL, color: WHITE, border: "none", borderRadius: 7, padding: "12px 24px", fontWeight: 600, fontSize: 14, fontFamily: "inherit", cursor: "pointer" },
+  btnPrimary: { display: "block", width: "100%", background: TEAL, color: WHITE, border: "none", borderRadius: 7, padding: "12px 24px", fontWeight: 600, fontSize: 13, fontFamily: "inherit", cursor: "pointer" },
   btnOutline: { background: WHITE, color: TEAL, border: `1px solid ${TEAL_MID}`, borderRadius: 7, padding: "10px 20px", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "inherit" },
   btnSkip: { background: "transparent", color: MUTED, border: `1px dashed ${BORDER}`, borderRadius: 7, padding: "8px 14px", fontWeight: 500, fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginTop: 8, width: "100%", textAlign: "center" },
   btnRestart: { background: "transparent", color: MUTED, border: "none", padding: "8px 4px", fontSize: 12, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 2 },
@@ -1349,9 +1377,9 @@ const s = {
   checkPin: { position: "absolute", top: -5, right: -5, fontSize: 8, background: ACCENT, color: WHITE, borderRadius: "50%", width: 14, height: 14, display: "flex", alignItems: "center", justifyContent: "center" },
   tabLabel: { color: TEXT, fontSize: 14, fontWeight: 600, marginLeft: 6 },
   qBlock: { marginBottom: 20, paddingBottom: 20, borderBottom: `1px solid ${BORDER}` },
-  qText: { color: TEXT, fontSize: 14, lineHeight: 1.6, margin: "0 0 10px", fontWeight: 500 },
+  qText: { color: TEXT, fontSize: 12, lineHeight: 1.6, margin: "0 0 10px", fontWeight: 500 },
   qNum: { color: TEAL, fontWeight: 700, marginRight: 4 },
-  opt: { background: WHITE, color: TEXT, border: `1px solid ${BORDER}`, borderRadius: 7, padding: "10px 12px", fontSize: 13, cursor: "pointer", textAlign: "left", lineHeight: 1.4, display: "flex", alignItems: "center", gap: 8, fontFamily: "inherit" },
+  opt: { background: WHITE, color: TEXT, border: `1px solid ${BORDER}`, borderRadius: 7, padding: "10px 12px", fontSize: 12, cursor: "pointer", textAlign: "left", lineHeight: 1.4, display: "flex", alignItems: "center", gap: 8, fontFamily: "inherit" },
   optSel: { background: TEAL_LIGHT, borderColor: TEAL, color: TEAL },
   radio: { width: 13, height: 13, borderRadius: "50%", border: `2px solid ${BORDER}`, flexShrink: 0 },
   radioSel: { background: TEAL, border: `2px solid ${TEAL}` },
@@ -1456,14 +1484,14 @@ const s = {
   contextSection: { background: WHITE, borderTop: `1px solid ${BORDER}`, padding: "72px 40px" },
   contextInner: { maxWidth: 680, margin: "0 auto" },
   contextTag: { display: "inline-block", background: TEAL_LIGHT, color: TEAL, border: `1px solid ${TEAL_MID}`, borderRadius: 20, padding: "4px 12px", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16 },
-  sectionTitle: { color: TEXT, fontSize: 26, fontWeight: 700, margin: "0 0 16px", letterSpacing: "-0.01em" },
-  contextText: { color: MUTED, fontSize: 15, lineHeight: 1.8, margin: "0 0 24px" },
+  sectionTitle: { color: TEXT, fontSize: 20, fontWeight: 700, margin: "0 0 16px", letterSpacing: "-0.01em" },
+  contextText: { color: MUTED, fontSize: 13, lineHeight: 1.8, margin: "0 0 24px" },
   contextLink: { color: TEAL, fontSize: 14, fontWeight: 600, textDecoration: "none", borderBottom: `1px solid ${TEAL_MID}`, paddingBottom: 2 },
 
   // ── FEEDBACK SECTION ─────────────────────────────────────────
   feedbackSection: { background: BG, borderTop: `1px solid ${BORDER}`, padding: "72px 40px" },
   feedbackInner: { maxWidth: 600, margin: "0 auto" },
-  feedbackSub: { color: MUTED, fontSize: 14, lineHeight: 1.7, margin: "0 0 28px" },
+  feedbackSub: { color: MUTED, fontSize: 12, lineHeight: 1.7, margin: "0 0 28px" },
   feedbackForm: { display: "flex", flexDirection: "column", gap: 12 },
   feedbackRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
   feedbackInput: { border: `1px solid ${BORDER}`, borderRadius: 7, padding: "10px 14px", color: TEXT, fontSize: 13, outline: "none", background: WHITE, fontFamily: "inherit" },
