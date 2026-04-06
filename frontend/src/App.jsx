@@ -174,6 +174,8 @@ function Header({ lang, setLang, onHelp }) {
 }
 
 export default function App() {
+  console.log("FRONTEND APP RUNNING");
+
   const [lang, setLang] = useState("es");
   const [step, setStep] = useState("intro");
   const [userRole, setUserRole] = useState(null);
