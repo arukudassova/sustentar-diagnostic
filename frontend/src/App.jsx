@@ -305,17 +305,7 @@ export default function App() {
     const newAnswers = {};
     fields.forEach(f => { newAnswers[f.id] = f.score; });
 
-    // Fill remaining questions with reasonable demo values so results page is complete
-    const demoRemainder = {
-      n1:3, n2:3, n3:0, n4:3, n5:0, n6:0, n7:0,
-      p1:0, p2:0, p3:3, p4:3, p5:0, p6:3, p7:0, p8:0, p9:0, p10:0,
-      ma1:0, ma3:1, ma4:3, ma5:0,
-      tp2:2, tp3:3, tp4:1, tp5:0, tp6:0, tp7:2, tp8:3, tp9:0, tp10:3,
-      tec1:0, tec2:0, tec3:3, tec4:0, tec5:0,
-      sv1:0, sv2:3, sv3:2, sv4:3, sv5:0, sv6:3, sv7:3, sv8:2, sv9:0, sv10:2, sv11:2, sv12:0,
-    };
-
-    setAnswers({ ...demoRemainder, ...newAnswers });
+    setAnswers(newAnswers);
     setOsmResult({ filledCount: fields.length, fields, city: base, isDemo: true });
     setOsmLoading(false);
     setStep("quiz");
@@ -567,37 +557,6 @@ export default function App() {
                     disabled={!cityName.trim()} onClick={() => setStep("role")}>
                     {t.startBtn}
                   </button>
-                  {cityName.trim() && (
-                    <div style={s.osmPanel}>
-                      <div style={s.osmPanelTop}>
-                        <div>
-                          <div style={s.osmPanelTitle}>{lang === "es" ? "Pre-completar desde OpenStreetMap" : "Pre-fill from OpenStreetMap"}</div>
-                          <div style={s.osmPanelSub}>{lang === "es" ? "Datos espaciales reales para 5 preguntas de movilidad activa y transporte" : "Real spatial data for 5 active mobility & transport questions"}</div>
-                        </div>
-                        <button style={{ ...s.osmBtn, opacity: osmLoading ? 0.6 : 1, cursor: osmLoading ? "default" : "pointer" }} disabled={osmLoading} onClick={fetchOSMData}>
-                          {osmLoading ? (lang === "es" ? "Consultando..." : "Querying...") : (lang === "es" ? "Analizar ciudad" : "Analyse city")}
-                        </button>
-                      </div>
-                      {osmResult && !osmResult.error && (
-                        <div style={s.osmResult}>
-                          <div style={s.osmResultTitle}>{lang === "es" ? `${osmResult.filledCount} respuestas completadas automáticamente para ${osmResult.city}` : `${osmResult.filledCount} answers auto-filled for ${osmResult.city}`}</div>
-                          <div style={s.osmResultGrid}>
-                            {osmResult.fields.map(f => (
-                              <div key={f.id} style={s.osmResultRow}>
-                                <span style={s.osmResultLabel}>{f.label}</span>
-                                <span style={s.osmResultVal}>{f.value} {f.unit}</span>
-                                <span style={{ ...s.osmResultScore, background: f.score === 3 ? "#dcf5e7" : f.score === 2 ? "#fef3c7" : "#fee2e2", color: f.score === 3 ? "#1a7a4a" : f.score === 2 ? "#8a6200" : "#9a1a1a" }}>{f.score} pts</span>
-                              </div>
-                            ))}
-                          </div>
-                          <div style={s.osmAttrib}>{osmResult.isDemo ? (lang === "es" ? "Datos de demostración basados en OpenStreetMap · overpass-api.de" : "Demo data based on OpenStreetMap · overpass-api.de") : "Fuente: OpenStreetMap contributors · overpass-api.de"}</div>
-                        </div>
-                      )}
-                      {osmResult?.error && (
-                        <div style={{ ...s.osmAttrib, color: "#c94040", marginTop: 8 }}>{osmResult.errorMsg}</div>
-                      )}
-                    </div>
-                  )}
                   <p style={s.hint}>{t.hint(totalQ, cats.length)}</p>
                 </div>
               )}
@@ -707,6 +666,35 @@ export default function App() {
               <span style={s.tabLabel}>{currentCat.label}</span>
             </div>
             <div style={{ marginBottom: 24 }}>
+              {/* OSM PANEL — only on Active Mobility and Transport tabs */}
+              {(currentCat.id === "movilidad_activa" || currentCat.id === "transporte") && !osmResult && (
+                <div style={{ ...s.osmPanel, marginBottom: 16 }}>
+                  <div style={s.osmPanelTop}>
+                    <div>
+                      <div style={s.osmPanelTitle}>{lang === "es" ? "Pre-completar desde OpenStreetMap" : "Pre-fill from OpenStreetMap"}</div>
+                      <div style={s.osmPanelSub}>{lang === "es" ? "Auto-completa preguntas de infraestructura con datos espaciales reales" : "Auto-fill infrastructure questions with real spatial data"}</div>
+                    </div>
+                    <button style={{ ...s.osmBtn, opacity: osmLoading ? 0.6 : 1, cursor: osmLoading ? "default" : "pointer" }} disabled={osmLoading} onClick={fetchOSMData}>
+                      {osmLoading ? (lang === "es" ? "Consultando..." : "Querying...") : (lang === "es" ? "Analizar ciudad" : "Analyse city")}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {osmResult && !osmResult.error && (
+                <div style={{ ...s.osmPanel, marginBottom: 16 }}>
+                  <div style={s.osmResultTitle}>{lang === "es" ? `✓ ${osmResult.filledCount} respuestas pre-completadas desde OpenStreetMap` : `✓ ${osmResult.filledCount} answers pre-filled from OpenStreetMap`}</div>
+                  <div style={s.osmResultGrid}>
+                    {osmResult.fields.map(f => (
+                      <div key={f.id} style={s.osmResultRow}>
+                        <span style={s.osmResultLabel}>{f.label}</span>
+                        <span style={s.osmResultVal}>{f.value} {f.unit}</span>
+                        <span style={{ ...s.osmResultScore, background: f.score === 3 ? "#dcf5e7" : f.score === 2 ? "#fef3c7" : "#fee2e2", color: f.score === 3 ? "#1a7a4a" : f.score === 2 ? "#8a6200" : "#9a1a1a" }}>{f.score} pts</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={s.osmAttrib}>{lang === "es" ? "Datos basados en OpenStreetMap · overpass-api.de" : "Data based on OpenStreetMap · overpass-api.de"}</div>
+                </div>
+              )}
               {currentCat.questions.map((q, qi) => {
                 const osmFilled = osmResult && !osmResult.error && osmResult.fields.some(f => f.id === q.id);
                 return (
@@ -933,7 +921,7 @@ export default function App() {
           <div style={s.contextTag}>{lang === "es" ? "Sobre la herramienta" : "About the tool"}</div>
           <h2 style={s.sectionTitle}>{lang === "es" ? "Basado en la Guía PMUS Argentina" : "Based on the PMUS Argentina Guide"}</h2>
           <p style={s.contextText}>{lang === "es" ? "Esta herramienta digitaliza el autodiagnóstico del Plan de Movilidad Urbana Sostenible (PMUS) desarrollado por Asociación Sustentar junto al Ministerio de Transporte de la Nación en 2023. Permite a municipios y autoridades de transporte evaluar su situación actual, identificar brechas y priorizar intervenciones de manera estructurada." : "This tool digitises the self-assessment of the Sustainable Urban Mobility Plan (SUMP) developed by Asociación Sustentar together with Argentina's Ministry of Transport in 2023. It allows municipalities and transport authorities to assess their current situation, identify gaps and prioritise interventions in a structured way."}</p>
-          <a href="https://datos.transporte.gob.ar/dataset/dd391c9d-8aeb-4508-a04d-feee67362608/resource/a461e4a5-26de-453e-b9dc-e64c616ad926/download/guia_para_la_planificacion_de_la_movilidad_urbana_sosostenible.pdf" target="_blank" rel="noreferrer" style={s.contextLink}>{lang === "es" ? "Ver guía completa →" : "View full guide →"}</a>
+          <a href="https://www.asociacionsustentar.org" target="_blank" rel="noreferrer" style={s.contextLink}>{lang === "es" ? "Ver guía completa →" : "View full guide →"}</a>
         </div>
       </section>
 
