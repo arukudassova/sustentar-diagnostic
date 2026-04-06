@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase.js";
+import html2pdf from "html2pdf.js";
 
 // Load Lato from Google Fonts
 if (typeof document !== "undefined" && !document.getElementById("sustentar-fonts")) {
@@ -32,9 +33,7 @@ const UI = {
     banner: "Herramienta de evaluación — Versión prototipo",
     source: "Basado en el Anexo Capítulo 2 — Guía PMUS Argentina (Sustentar / Ministerio de Transporte)",
     introTitle: "Evaluación de Movilidad Sostenible Municipal",
-    introDesc: "Esta herramienta permite diagnosticar el estado de la movilidad urbana en ciudades argentinas, generando un puntaje de riesgo por dimensión basado en la metodología de la Guía PMUS.",
-    cityLabel: "Ciudad a evaluar",
-    cityPlaceholder: "— Seleccionar ciudad —",
+    introDesc: "Esta herramienta diagnostica el estado de la movilidad urbana en ciudades de América Latina, generando un puntaje de riesgo en 6 dimensiones basado en la metodología de la Guía PMUS Argentina (Sustentar / Ministerio de Transporte).",     cityPlaceholder: "— Seleccionar ciudad —",
     startBtn: "Iniciar diagnóstico →",
     hint: (q, c) => `${q} preguntas · ${c} dimensiones · ~10 min`,
     progressLabel: (a, t) => `${a} / ${t} respondidas`,
@@ -57,14 +56,14 @@ const UI = {
     riskLow: "Bajo", riskMod: "Moderado", riskHigh: "Alto", riskCrit: "Crítico",
     riskPrefix: "Riesgo ",
     pts: "pts",
+    downloadBtn: "Descargar informe",
   },
   en: {
     headerSub: "Urban Mobility Diagnostic",
     banner: "Assessment tool — Prototype version",
     source: "Based on Annex Chapter 2 — SUMP Guide Argentina (Sustentar / Ministry of Transport)",
     introTitle: "Municipal Sustainable Mobility Assessment",
-    introDesc: "This tool diagnoses the state of urban mobility in Argentine cities, generating a risk score per dimension based on the SUMP Guide methodology.",
-    cityLabel: "City to assess",
+    introDesc: "This tool diagnoses the state of urban mobility in Latin American cities, generating a risk score across 6 dimensions based on the methodology of the PMUS Argentina Guide (Sustentar / Ministry of Transport).",    cityLabel: "City to assess",
     cityPlaceholder: "— Select a city —",
     startBtn: "Start diagnostic →",
     hint: (q, c) => `${q} questions · ${c} dimensions · ~10 min`,
@@ -88,6 +87,7 @@ const UI = {
     riskLow: "Low", riskMod: "Moderate", riskHigh: "High", riskCrit: "Critical",
     riskPrefix: "Risk: ",
     pts: "pts",
+    downloadBtn: "Download report",
   },
 };
 
@@ -126,9 +126,41 @@ function LangToggle({ lang, setLang }) {
 }
 
 function Header({ lang, setLang, onHelp }) {
+  const [scrolled, setScrolled] = useState(false);
+    useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 30);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
   return (
-    <div style={s.header}>
-      <img src={LOGO_URL} alt="Sustentar" style={s.logoImg} />
+    <div style={{
+      ...s.header,
+      padding: scrolled ? "8px 16px" : "16px 24px",
+      height: scrolled ? 60 : 90,
+      transition: "all 0.3s ease",
+      position: "sticky",
+      top: 0,
+      zIndex: 1000,
+      background: "#fff",
+      boxShadow: scrolled ? "0 2px 8px rgba(0,0,0,0.05)" : "none"
+    }}>
+      <img
+        src={LOGO_URL}
+        alt="Sustentar"
+        style={{
+        height: scrolled ? 18 : 28,
+        maxHeight: scrolled ? 18 : 28,
+        width: "auto",
+        objectFit: "contain",
+        transition: "all 0.3s ease",
+        display: "block",
+        cursor: "pointer"
+      }}
+      onClick={reset}
+          />
       <div style={s.headerDiv} />
       <span style={s.headerSub}>{UI[lang].headerSub}</span>
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
@@ -159,13 +191,40 @@ export default function App() {
   const [fbName, setFbName] = useState("");
   const [fbMessage, setFbMessage] = useState("");
   const [fbSubmitted, setFbSubmitted] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 30);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+  const [offset, setOffset] = useState(0);
 
+  useEffect(() => {
+    const onScroll = () => setOffset(window.scrollY);
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  
   // API data state
   const [apiCities, setApiCities] = useState(null);
   const [apiQuestions, setApiQuestions] = useState(null);
   const [apiMeasures, setApiMeasures] = useState(null);
   const [apiLoading, setApiLoading] = useState(true);
   const [apiError, setApiError] = useState(false);
+
+  function downloadReport() {
+    const element = document.getElementById("report");
+
+    if (!element) return; // safety
+
+    html2pdf().set({
+      margin: 10,
+      filename: `mobility-report-${cityName || "city"}.pdf`,
+      image: { type: "jpeg", quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
+    }).from(element).save();
+  }
 
   // Fetch all data from Supabase on mount and when lang changes
   useEffect(() => {
@@ -477,41 +536,114 @@ export default function App() {
       )}
 
       {/* STICKY HEADER */}
-      <header style={s.stickyHeader}>
-        <div style={s.headerInner}>
-          <img src={LOGO_URL} alt="Sustentar" style={{ height: 28, objectFit: "contain", cursor: "pointer" }} onClick={reset} />
-          {isQuizActive && cityName && (
-            <span style={s.navCityBadge}>{cityName}</span>
-          )}
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-            {isQuizActive && (
-              <button style={s.navRestartBtn} onClick={reset}>
-                {lang === "es" ? "← Inicio" : "← Home"}
-              </button>
+    <header style={{
+      ...s.stickyHeader,
+      height: scrolled ? 60 : 90,
+      padding: "0 24px",
+      display: "flex",
+      alignItems: "center",
+      transition: "all 0.3s ease",
+
+      background: scrolled
+        ? "#ffffff"
+        : "linear-gradient(to bottom, rgba(0,0,0,0.55), rgba(0,0,0,0.15))",
+
+      color: scrolled ? "#000" : "#fff",
+
+      boxShadow: scrolled ? "0 4px 16px rgba(0,0,0,0.08)" : "none"
+    }}>
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            width: "100%"
+          }}>
+          <img
+            src={LOGO_URL}
+            alt="Sustentar"
+            style={{
+              height: scrolled ? 22 : 32,
+              filter: scrolled ? "none" : "brightness(0) invert(1)",
+              transition: "all 0.3s ease"
+            }}
+            onClick={reset}
+          />
+
+            {isQuizActive && cityName && (
+              <span style={s.navCityBadge}>{cityName}</span>
             )}
-            <button style={s.helpBtn} onClick={() => setShowOnboarding(true)} title={lang === "es" ? "Cómo usar" : "How to use"}>?</button>
-            <LangToggle lang={lang} setLang={setLang} />
+
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+              {isQuizActive && (
+                <button style={s.navRestartBtn} onClick={reset}>
+                  {lang === "es" ? "← Inicio" : "← Home"}
+                </button>
+              )}
+              <button style={s.helpBtn} onClick={() => setShowOnboarding(true)}>
+                ?
+              </button>
+              <LangToggle lang={lang} setLang={setLang} />
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
 
       {/* HERO — intro only */}
       {step === "intro" && (
-        <section style={s.heroSection}>
-          <div style={s.heroInner}>
-            <div style={s.heroBadge}>{lang === "es" ? "Guía PMUS Argentina · Versión prototipo" : "PMUS Argentina Guide · Prototype version"}</div>
-            <h1 style={s.heroTitle}>{lang === "es" ? "Evaluación de Movilidad Sostenible Municipal" : "Municipal Sustainable Mobility Assessment"}</h1>
-            <p style={s.heroSub}>{lang === "es" ? "Diagnóstico del estado de la movilidad urbana basado en la metodología de la Guía PMUS Argentina, co-elaborada por Sustentar y el Ministerio de Transporte de la Nación." : "Urban mobility diagnostic based on the methodology of the PMUS Argentina Guide, co-authored by Sustentar and the Ministry of Transport."}</p>
-            <div style={s.heroStats}>
-              <div style={s.heroStat}><span style={s.heroStatNum}>52</span><span style={s.heroStatLabel}>{lang === "es" ? "Preguntas" : "Questions"}</span></div>
-              <div style={s.heroStatDiv} />
-              <div style={s.heroStat}><span style={s.heroStatNum}>6</span><span style={s.heroStatLabel}>{lang === "es" ? "Dimensiones" : "Dimensions"}</span></div>
-              <div style={s.heroStatDiv} />
-              <div style={s.heroStat}><span style={s.heroStatNum}>33</span><span style={s.heroStatLabel}>{lang === "es" ? "Medidas PMUS" : "PMUS Measures"}</span></div>
-            </div>
-            <a href="#herramienta" style={s.heroScrollBtn}>{lang === "es" ? "Comenzar diagnóstico" : "Start assessment"}</a>
+        <section style={{
+          ...s.heroSection,
+
+          minHeight: "90vh",   // 🔥 bigger hero
+          height: "90vh",
+
+          marginTop: "-80px",
+          paddingTop: "80px",
+
+          backgroundImage: "url('/hero-bg.jpg')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center"
+        }}>
+          {/* DARK OVERLAY */}
+        <div style={{
+          position: "absolute",
+          inset: 0,
+          background: "linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.35))"
+        }} />
+
+        {/* CONTENT */}
+          <div style={{
+            ...s.heroInner,
+            position: "relative",
+            zIndex: 1,
+            transform: `translateY(${offset * 0.15}px)`,
+            transition: "transform 0.1s linear"
+          }}>
+          <div style={{
+            ...s.heroBadge,
+            color: "#fff",
+            borderColor: "rgba(255,255,255,0.4)",
+            background: "rgba(255,255,255,0.1)"
+          }}>
+            {lang === "es"
+              ? "Guía PMUS Argentina"
+              : "PMUS Argentina Guide"}
           </div>
-        </section>
+
+          <h1 style={{
+            ...s.heroTitle,
+            color: "#fff"
+          }}>
+            {lang === "es"
+              ? "Evaluación de Movilidad Sostenible Municipal"
+              : "Municipal Sustainable Mobility Assessment"}
+          </h1>
+        </div>
+
+      </section>
       )}
 
       {/* TOOL SECTION */}
@@ -519,8 +651,15 @@ export default function App() {
 
         {/* INTRO */}
         {step === "intro" && (
-          <div style={{ maxWidth: 680, width: "100%" }}>
+          <div style={{ maxWidth: 680, margin: "0 auto" }}>
             <div style={s.card}>
+              {/* STATS INSIDE BOX */}
+              <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
+                <span style={s.chip}>52 {lang === "es" ? "preguntas" : "questions"}</span>
+                <span style={s.chip}>6 {lang === "es" ? "dimensiones" : "dimensions"}</span>
+                <span style={s.chip}>~10 min</span>
+              </div>
+
               <p style={s.desc}>{t.introDesc}</p>
               <div style={{ ...s.sourceNote, marginBottom: 20 }}>{t.source}</div>
 
@@ -796,118 +935,132 @@ export default function App() {
             ecm: { es: "Enfoque ECM", en: "ECM framework" },
           };
           return (
-            <div style={{ ...s.card, maxWidth: 900 }}>
-              <div style={s.resultsTop}>
-                <div>
-                  <span style={s.cityPill}>{cityName}</span>
-                  <h2 style={s.h2}>{t.resultsTitle}</h2>
-                  <p style={s.desc2}>{t.resultsSub}</p>
-                  {osmResult?.isDemo && (
-                    <div style={{ marginTop: 6, display: "inline-flex", alignItems: "center", gap: 6, background: "#f0fbfb", border: "1px solid #b2e4e4", borderRadius: 5, padding: "3px 10px" }}>
-                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#0a9ea0", flexShrink: 0, display: "inline-block" }} />
-                      <span style={{ color: "#0a6060", fontSize: 11 }}>{lang === "es" ? `${osmResult.filledCount} preguntas pre-completadas desde OpenStreetMap` : `${osmResult.filledCount} questions pre-filled from OpenStreetMap`}</span>
-                    </div>
-                  )}
-                </div>
-                <div style={{ textAlign: "center" }}>
-                  <RadialScore pct={total} color={risk.dot} size={90} />
-                  <div style={{ ...s.badge, background: risk.bg, color: risk.color }}>{t.riskPrefix}{risk.label}</div>
-                  <div style={s.totalLbl}>{t.totalLabel}</div>
-                </div>
-              </div>
-              <div style={s.grid}>
-                {cats.map((cat) => {
-                  const pct = catPct(cat);
-                  const raw = catRaw(cat);
-                  const r = getRiskLevel(pct, lang);
-                  return (
-                    <div key={cat.id} style={{ ...s.catCard, borderTop: `3px solid ${r.dot}` }}>
-                      <div style={s.catHead}>
-                        <div>
-                          <div style={s.catName}>{cat.label}</div>
-                          <div style={s.catScore}>{raw} / {cat.maxScore} {t.pts}</div>
-                          <span style={{ ...s.badgeSm, background: r.bg, color: r.color }}>{r.label}</span>
-                        </div>
-                        <RadialScore pct={pct} color={r.dot} size={68} />
+            <>
+              <div id="report" style={{ ...s.card, maxWidth: 900 }}>
+                <div style={s.resultsTop}>
+                  <div>
+                    <span style={s.cityPill}>{cityName}</span>
+                    <h2 style={s.h2}>{t.resultsTitle}</h2>
+                    <p style={s.desc2}>{t.resultsSub}</p>
+                    {osmResult?.isDemo && (
+                      <div style={{ marginTop: 6, display: "inline-flex", alignItems: "center", gap: 6, background: "#f0fbfb", border: "1px solid #b2e4e4", borderRadius: 5, padding: "3px 10px" }}>
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#0a9ea0", flexShrink: 0, display: "inline-block" }} />
+                        <span style={{ color: "#0a6060", fontSize: 11 }}>{lang === "es" ? `${osmResult.filledCount} preguntas pre-completadas desde OpenStreetMap` : `${osmResult.filledCount} questions pre-filled from OpenStreetMap`}</span>
                       </div>
-                      <button
-                        style={s.catToggle}
-                        onClick={() => setExpandedCats(prev => ({ ...prev, [cat.id]: !prev[cat.id] }))}>
-                        {expandedCats[cat.id]
-                          ? (lang === "es" ? "▲ Ocultar respuestas" : "▲ Hide answers")
-                          : (lang === "es" ? "▼ Ver respuestas" : "▼ Show answers")}
-                      </button>
-                      {expandedCats[cat.id] && (
-                        <>
-                          <div style={s.sep} />
-                          {cat.questions.map((q) => {
-                            const a = q.options.find((o) => o.score === answers[q.id]);
-                            return (
-                              <div key={q.id} style={{ marginBottom: 8 }}>
-                                <span style={s.aQ}>{q.text}</span>
-                                <span style={s.aA}>{a?.label ?? "—"} <span style={{ color: MUTED, fontWeight: 400 }}>({answers[q.id] ?? 0} {t.pts})</span></span>
+                    )}
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <RadialScore pct={total} color={risk.dot} size={90} />
+                    <div style={{ ...s.badge, background: risk.bg, color: risk.color }}>{t.riskPrefix}{risk.label}</div>
+                    <div style={s.totalLbl}>{t.totalLabel}</div>
+                  </div>
+                </div>
+                <div style={s.grid}>
+                  {cats.map((cat) => {
+                    const pct = catPct(cat);
+                    const raw = catRaw(cat);
+                    const r = getRiskLevel(pct, lang);
+                    return (
+                      <div key={cat.id} style={{ ...s.catCard, borderTop: `3px solid ${r.dot}` }}>
+                        <div style={s.catHead}>
+                          <div>
+                            <div style={s.catName}>{cat.label}</div>
+                            <div style={s.catScore}>{raw} / {cat.maxScore} {t.pts}</div>
+                            <span style={{ ...s.badgeSm, background: r.bg, color: r.color }}>{r.label}</span>
+                          </div>
+                          <RadialScore pct={pct} color={r.dot} size={68} />
+                        </div>
+                        <button
+                          style={s.catToggle}
+                          onClick={() => setExpandedCats(prev => ({ ...prev, [cat.id]: !prev[cat.id] }))}>
+                          {expandedCats[cat.id]
+                            ? (lang === "es" ? "▲ Ocultar respuestas" : "▲ Hide answers")
+                            : (lang === "es" ? "▼ Ver respuestas" : "▼ Show answers")}
+                        </button>
+                        {expandedCats[cat.id] && (
+                          <>
+                            <div style={s.sep} />
+                            {cat.questions.map((q) => {
+                              const a = q.options.find((o) => o.score === answers[q.id]);
+                              return (
+                                <div key={q.id} style={{ marginBottom: 8 }}>
+                                  <span style={s.aQ}>{q.text}</span>
+                                  <span style={s.aA}>{a?.label ?? "—"} <span style={{ color: MUTED, fontWeight: 400 }}>({answers[q.id] ?? 0} {t.pts})</span></span>
+                                </div>
+                              );
+                            })}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={s.methodNote}><strong>{lang === "es" ? "Metodología:" : "Methodology:"}</strong> {t.methodNote.replace(/^[^:]+: /, "")}</div>
+                <div style={{ ...s.methodNote, background: "#f0f9ff", borderColor: "#bae6fd", marginBottom: 20 }}>
+                  <strong>{t.recTitle}</strong>
+                  {t.rec.map((r) => (
+                    <div key={r.range} style={{ marginTop: 6 }}>
+                      <span style={{ fontWeight: 700, color: TEXT }}>{r.range}:</span> <span>{r.action}</span>
+                    </div>
+                  ))}
+                </div>
+                {(() => {
+                  const suggested = getSuggestedMeasures().slice(0, 6);
+                  if (suggested.length === 0) return null;
+                  return (
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={s.suggestTitle}>{lang === "es" ? "Medidas recomendadas" : "Recommended measures"}</div>
+                      <div style={s.suggestSub}>{lang === "es" ? "Dimensiones con puntaje inferior al 50% — Guía PMUS Argentina" : "Dimensions scoring below 50% — Argentina SUMP Guide"}</div>
+                      <div style={s.suggestGrid}>
+                        {suggested.map(m => {
+                          const grp = MEASURES_DATA.find(g => g.measures.some(x => x.code === m.code));
+                          if (!grp) return null;
+                          return (
+                            <div key={m.code} style={{ ...s.suggestCard, borderTop: `3px solid ${grp.color}`, background: grp.light }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                                <span style={{ ...s.suggestCardCode, background: grp.color }}>{m.code}</span>
+                                <span style={s.suggestCardName}>{m.name[lang]}</span>
                               </div>
-                            );
-                          })}
-                        </>
-                      )}
+                              <p style={s.suggestCardDesc}>{m.desc[lang]}</p>
+                              <div style={s.suggestCardDivider} />
+                              {[
+                                { key: "tipos", val: Array.isArray(m.tipos) ? m.tipos.join(" · ") : null },
+                                { key: "horizonte", val: m.horizonte?.[lang] },
+                                { key: "costo", val: m.costo?.[lang] },
+                                { key: "ambito", val: m.ambito?.[lang] },
+                                { key: "ecm", val: m.ecm?.[lang] },
+                              ].map(row => row.val ? (
+                                <div key={row.key} style={s.suggestCardRow}>
+                                  <span style={{ ...s.suggestCardRowLabel, color: grp.color }}>{fieldLabel[row.key][lang]}</span>
+                                  <span style={s.suggestCardRowVal}>{row.val}</span>
+                                </div>
+                              ) : null)}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
-                })}
+                })()}
               </div>
-              <div style={s.methodNote}><strong>{lang === "es" ? "Metodología:" : "Methodology:"}</strong> {t.methodNote.replace(/^[^:]+: /, "")}</div>
-              <div style={{ ...s.methodNote, background: "#f0f9ff", borderColor: "#bae6fd", marginBottom: 20 }}>
-                <strong>{t.recTitle}</strong>
-                {t.rec.map((r) => (
-                  <div key={r.range} style={{ marginTop: 6 }}>
-                    <span style={{ fontWeight: 700, color: TEXT }}>{r.range}:</span> <span>{r.action}</span>
-                  </div>
-                ))}
-              </div>
-              {(() => {
-                const suggested = getSuggestedMeasures().slice(0, 6);
-                if (suggested.length === 0) return null;
-                return (
-                  <div style={{ marginBottom: 20 }}>
-                    <div style={s.suggestTitle}>{lang === "es" ? "Medidas recomendadas" : "Recommended measures"}</div>
-                    <div style={s.suggestSub}>{lang === "es" ? "Dimensiones con puntaje inferior al 50% — Guía PMUS Argentina" : "Dimensions scoring below 50% — Argentina SUMP Guide"}</div>
-                    <div style={s.suggestGrid}>
-                      {suggested.map(m => {
-                        const grp = MEASURES_DATA.find(g => g.measures.some(x => x.code === m.code));
-                        if (!grp) return null;
-                        return (
-                          <div key={m.code} style={{ ...s.suggestCard, borderTop: `3px solid ${grp.color}`, background: grp.light }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                              <span style={{ ...s.suggestCardCode, background: grp.color }}>{m.code}</span>
-                              <span style={s.suggestCardName}>{m.name[lang]}</span>
-                            </div>
-                            <p style={s.suggestCardDesc}>{m.desc[lang]}</p>
-                            <div style={s.suggestCardDivider} />
-                            {[
-                              { key: "tipos", val: Array.isArray(m.tipos) ? m.tipos.join(" · ") : null },
-                              { key: "horizonte", val: m.horizonte?.[lang] },
-                              { key: "costo", val: m.costo?.[lang] },
-                              { key: "ambito", val: m.ambito?.[lang] },
-                              { key: "ecm", val: m.ecm?.[lang] },
-                            ].map(row => row.val ? (
-                              <div key={row.key} style={s.suggestCardRow}>
-                                <span style={{ ...s.suggestCardRowLabel, color: grp.color }}>{fieldLabel[row.key][lang]}</span>
-                                <span style={s.suggestCardRowVal}>{row.val}</span>
-                              </div>
-                            ) : null)}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
-              <div style={{ display: "flex", gap: 12 }}>
-                <button style={s.btnOutline} onClick={() => { setAnswers({}); setCatIdx(0); setStep("quiz"); }}>{t.editBtn}</button>
-                <button style={s.btnOutline} onClick={() => alert(lang === "es" ? "La descarga del informe estará disponible en la versión final." : "Report download will be available in the final version.")}>{lang === "es" ? "Descargar informe" : "Download report"}</button>
-                <button style={s.btnPrimary} onClick={reset}>{t.newBtn}</button>
-              </div>
-            </div>
+
+              {/* BUTTONS OUTSIDE */}
+              <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
+                    <button
+                      style={s.btnOutline}
+                      onClick={() => { setAnswers({}); setCatIdx(0); setStep("quiz"); }}>
+                      {t.editBtn}
+                    </button>
+
+                    <button style={s.btnOutline} onClick={downloadReport}>
+                      {t.downloadBtn}
+                    </button>
+
+                    <button style={s.btnPrimary} onClick={reset}>
+                      {t.newBtn}
+                    </button>
+                </div>
+              </>
           );
         })()}
 
@@ -988,8 +1141,27 @@ const s = {
   // ── HERO ─────────────────────────────────────────────────────
   heroSection: { background: WHITE, borderBottom: `1px solid ${BORDER}`, padding: "72px 40px 64px" },
   heroInner: { maxWidth: 700, margin: "0 auto", textAlign: "center" },
-  heroBadge: { display: "inline-block", background: TEAL_LIGHT, color: TEAL, border: `1px solid ${TEAL_MID}`, borderRadius: 20, padding: "5px 14px", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 20 },
-  heroTitle: { color: TEXT, fontSize: 30, fontWeight: 800, lineHeight: 1.2, margin: "0 0 20px", letterSpacing: "-0.02em" },
+  heroBadge: {
+    display: "inline-block",
+    background: "rgba(255,255,255,0.12)",
+    color: "#fff",
+    border: "1px solid rgba(255,255,255,0.3)",
+    borderRadius: 20,
+    padding: "5px 14px",
+    fontSize: 11,
+    fontWeight: 600,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    marginBottom: 20
+  },
+  heroTitle: {
+    color: "#fff",
+    fontSize: "clamp(28px, 4vw, 48px)",
+    fontWeight: 800,
+    lineHeight: 1.15,
+    margin: "0 0 20px",
+    letterSpacing: "-0.02em"
+  },
   heroSub: { color: MUTED, fontSize: 13, lineHeight: 1.7, margin: "0 0 36px", maxWidth: 560, marginLeft: "auto", marginRight: "auto" },
   heroStats: { display: "flex", alignItems: "center", justifyContent: "center", gap: 0, marginBottom: 36, background: TEAL_LIGHT, borderRadius: 12, padding: "16px 32px", border: `1px solid ${TEAL_MID}`, display: "inline-flex" },
   heroStat: { display: "flex", flexDirection: "column", alignItems: "center", padding: "0 24px" },
