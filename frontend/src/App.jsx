@@ -521,8 +521,6 @@ export default function App() {
         {step === "intro" && (
           <div style={{ maxWidth: 680, width: "100%" }}>
             <div style={s.card}>
-              <div style={s.banner}><span style={s.bannerDot} />{t.banner}</div>
-              <h1 style={s.h1}>{t.introTitle}</h1>
               <p style={s.desc}>{t.introDesc}</p>
               <div style={{ ...s.sourceNote, marginBottom: 20 }}>{t.source}</div>
 
@@ -530,7 +528,7 @@ export default function App() {
               <div style={s.introTabBar}>
                 {[
                   { id: "tool", es: "Sobre la herramienta", en: "About the tool" },
-                  { id: "measures", es: "Medidas PMUS", en: "PMUS Measures" },
+                  { id: "measures", es: "Glosario", en: "Glossary" },
                 ].map(tab => (
                   <button key={tab.id}
                     style={{ ...s.introTabBtn, ...(introTab === tab.id ? s.introTabBtnActive : {}) }}
