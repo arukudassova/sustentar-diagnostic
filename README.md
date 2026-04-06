@@ -1,16 +1,65 @@
-# React + Vite
+# Sustentar Diagnostic
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Web application for evaluating municipal sustainable mobility using real-time spatial data and a structured diagnostic flow.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Overview
 
-## React Compiler
+Sustentar Diagnostic enables users to assess urban mobility conditions through an interactive interface. It combines user inputs with external spatial data to generate standardized indicators for transport infrastructure.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the ESLint configuration
+## Problem
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Urban mobility data is fragmented and difficult to interpret without technical expertise, limiting its practical use in decision-making.
+
+---
+
+## Solution
+
+The application provides a guided diagnostic flow and integrates external data sources to produce accessible mobility metrics for cities.
+
+---
+
+## Tech Stack
+
+- Frontend: React (Vite)  
+- Backend: FastAPI (Python)  
+- Database: Supabase  
+- APIs: Geoapify  
+
+---
+
+## Features
+
+- Interactive diagnostic (multi-step flow)  
+- Real-time spatial data integration  
+- Backend caching  
+- Feedback collection  
+
+---
+
+## Getting Started
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### Backend
+```
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python main.py
+```
+### API
+- GET /api/health
+- GET /api/spatial/{city_name}
+- POST /api/feedback
+
