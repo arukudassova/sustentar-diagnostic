@@ -1072,7 +1072,7 @@ export default function App() {
           <div style={s.contextTag}>{lang === "es" ? "Sobre la herramienta" : "About the tool"}</div>
           <h2 style={s.sectionTitle}>{lang === "es" ? "Basado en la Guía PMUS Argentina" : "Based on the PMUS Argentina Guide"}</h2>
           <p style={s.contextText}>{lang === "es" ? "Esta herramienta digitaliza el autodiagnóstico del Plan de Movilidad Urbana Sostenible (PMUS) desarrollado por Asociación Sustentar junto al Ministerio de Transporte de la Nación en 2023. Permite a municipios y autoridades de transporte evaluar su situación actual, identificar brechas y priorizar intervenciones de manera estructurada." : "This tool digitises the self-assessment of the Sustainable Urban Mobility Plan (SUMP) developed by Asociación Sustentar together with Argentina's Ministry of Transport in 2023. It allows municipalities and transport authorities to assess their current situation, identify gaps and prioritise interventions in a structured way."}</p>
-          <a href="https://www.asociacionsustentar.org" target="_blank" rel="noreferrer" style={s.contextLink}>{lang === "es" ? "Ver guía completa →" : "View full guide →"}</a>
+          <a href="https://datos.transporte.gob.ar/dataset/dd391c9d-8aeb-4508-a04d-feee67362608/resource/a461e4a5-26de-453e-b9dc-e64c616ad926/download/guia_para_la_planificacion_de_la_movilidad_urbana_sosostenible.pdf" target="_blank" rel="noreferrer" style={s.contextLink}>{lang === "es" ? "Ver guía completa →" : "View full guide →"}</a>
         </div>
       </section>
 
