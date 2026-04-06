@@ -2,25 +2,17 @@
 
 Web application for evaluating municipal sustainable mobility using real-time spatial data and a structured diagnostic flow.
 
----
-
 ## Overview
 
 Sustentar Diagnostic enables users to assess urban mobility conditions through an interactive interface. It combines user inputs with external spatial data to generate standardized indicators for transport infrastructure.
-
----
 
 ## Problem
 
 Urban mobility data is fragmented and difficult to interpret without technical expertise, limiting its practical use in decision-making.
 
----
-
 ## Solution
 
 The application provides a guided diagnostic flow and integrates external data sources to produce accessible mobility metrics for cities.
-
----
 
 ## Tech Stack
 
@@ -29,16 +21,12 @@ The application provides a guided diagnostic flow and integrates external data s
 - Database: Supabase  
 - APIs: Geoapify  
 
----
-
 ## Features
 
 - Interactive diagnostic (multi-step flow)  
 - Real-time spatial data integration  
 - Backend caching  
 - Feedback collection  
-
----
 
 ## Getting Started
 
