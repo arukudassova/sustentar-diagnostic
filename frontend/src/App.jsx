@@ -72,80 +72,6 @@ export default function App() {
     }).from(element).save();
   }
 
-  // Fetch all data from Supabase on mount and when lang changes
-  useEffect(() => {
-    async function fetchAll() {
-      setApiLoading(true);
-      try {
-        // Cities
-        const { data: citiesRaw } = await supabase
-          .from("cities").select("name, country").order("country").order("name");
-        const grouped = {};
-        citiesRaw.forEach(({ name, country }) => {
-          if (!grouped[country]) grouped[country] = [];
-          grouped[country].push(name);
-        });
-        setApiCities(Object.entries(grouped).map(([country, cities]) => ({ country, cities })));
-
-        // Questions with options
-        const { data: cats } = await supabase
-          .from("categories").select("*").order("sort_order");
-        const { data: qs } = await supabase
-          .from("questions").select("*").order("sort_order");
-        const { data: opts } = await supabase
-          .from("question_options").select("*").order("sort_order");
-
-        const optsMap = {};
-        opts.forEach(o => {
-          if (!optsMap[o.question_id]) optsMap[o.question_id] = [];
-          optsMap[o.question_id].push({ label: o[`label_${lang}`], score: o.score });
-        });
-        const qsMap = {};
-        qs.forEach(q => {
-          if (!qsMap[q.category_slug]) qsMap[q.category_slug] = [];
-          qsMap[q.category_slug].push({ id: q.question_id, text: q[`text_${lang}`], options: optsMap[q.question_id] || [] });
-        });
-        setApiQuestions(cats.map(c => ({
-          id: c.slug, label: c[`label_${lang}`], maxScore: c.max_score,
-          questions: qsMap[c.slug] || []
-        })));
-
-        // Measures
-        const { data: groups } = await supabase
-          .from("measure_groups").select("*").order("sort_order");
-        const { data: measures } = await supabase
-          .from("measures").select("*");
-        const measuresMap = {};
-        measures.forEach(m => {
-          if (!measuresMap[m.group_letter]) measuresMap[m.group_letter] = [];
-          measuresMap[m.group_letter].push({
-            code: m.code,
-            name: { es: m.name_es, en: m.name_en },
-            desc: { es: m.desc_es, en: m.desc_en },
-            tipos: m[`tipos_${lang}`],
-            horizonte: { es: m.horizonte_es, en: m.horizonte_en },
-            costo: { es: m.costo_es, en: m.costo_en },
-            ambito: { es: m.ambito_es, en: m.ambito_en },
-            ecm: { es: m.ecm_es, en: m.ecm_en },
-            diagCats: m.diag_cats,
-          });
-        });
-        setApiMeasures(groups.map(g => ({
-          group: g.group_letter,
-          label: { es: g.label_es, en: g.label_en },
-          color: g.color, bg: g.bg, light: g.light,
-          measures: measuresMap[g.group_letter] || []
-        })));
-
-      } catch (e) {
-        console.warn("Supabase fetch failed:", e);
-        setApiError(true);
-      }
-      setApiLoading(false);
-    }
-    fetchAll();
-  }, [lang]);
-
   const CITIES_DATA = apiCities || [];
   const CATEGORIES_DATA = apiQuestions || [];
   const MEASURES_DATA = apiMeasures || [];
@@ -157,36 +83,24 @@ export default function App() {
 
     const base = cityName.split(",")[0].trim();
 
-    // Simulate brief loading pause
-    await new Promise(r => setTimeout(r, 1200));
-
     let osmData = null;
 
-    // Try Supabase first
     try {
-      const { data } = await supabase
-        .from("osm_demo_data")
-        .select("*")
-        .eq("city_name", base)
-        .single();
-      if (data) {
-        osmData = {
-          cycleways: data.cycleways,
-          bikeParking: data.bike_parking,
-          bikeShare: data.bike_share,
-          pedestrian: data.pedestrian,
-          busStops: data.bus_stops
-        };
-      }
+      const res = await fetch(`${API_URL}/api/spatial/${encodeURIComponent(base)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      osmData = {
+        cycleways: data.cycleways,
+        bikeParking: data.bike_parking,
+        bikeShare: data.bike_share,
+        pedestrian: data.pedestrian,
+        busStops: data.bus_stops
+      };
     } catch (e) {
-      console.warn("Supabase OSM fetch failed, using local demo data");
-    }
-
-    if (!osmData) {
-      // For cities without demo data, show a friendly message
+      console.warn("OSM API fetch failed:", e);
       setOsmResult({ error: true, errorMsg: lang === "es"
-        ? `Datos no disponibles para ${base}. En la versión final se conectará con OpenStreetMap en tiempo real.`
-        : `Data not available for ${base}. The final version will connect to OpenStreetMap in real time.`
+        ? `No se pudieron obtener datos para ${base}. Verificá que el servidor esté activo.`
+        : `Could not fetch data for ${base}. Check that the server is running.`
       });
       setOsmLoading(false);
       return;
@@ -234,7 +148,7 @@ export default function App() {
     setFbSubmitted(true);
   }
 
-    function reset() { setStep("intro"); setAnswers({}); setCatIdx(0); setCityName(""); setSelectedTile(null); setUserRole(null); setCitySize(null); setFbSubmitted(false); }
+    function reset() { setStep("intro"); setAnswers({}); setCatIdx(0); setCityName(""); setSelectedTile(null); setUserRole(null); setCitySize(null); setFbSubmitted(false); setOsmResult(null); setOsmLoading(false); }
 
   function skipToResults() {
     setStep("review");

@@ -86,6 +86,14 @@ export default function QuizView({
               </div>
             </div>
           )}
+          {(currentCat?.id === "movilidad_activa" || currentCat?.id === "transporte") && osmResult?.error && (
+            <div style={{ ...s.osmPanel, marginBottom: 12, borderColor: "#f5c0c0", background: "#fff5f5" }}>
+              <div style={{ fontSize: 13, color: "#9a1a1a", marginBottom: 8 }}>{osmResult.errorMsg}</div>
+              <button style={{ ...s.osmBtn, background: "#e55", fontSize: 12 }} onClick={fetchOSMData}>
+                {lang === "es" ? "Reintentar" : "Retry"}
+              </button>
+            </div>
+          )}
           {osmResult && !osmResult.error && (
             <div style={{ ...s.osmPanel, marginBottom: 12 }}>
               <div style={s.osmResultTitle}>{lang === "es" ? `✓ ${osmResult.filledCount} respuestas pre-completadas desde OpenStreetMap` : `✓ ${osmResult.filledCount} answers pre-filled from OpenStreetMap`}</div>
