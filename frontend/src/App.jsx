@@ -44,17 +44,15 @@ export default function App() {
   const [fbMessage, setFbMessage] = useState("");
   const [fbSubmitted, setFbSubmitted] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 30);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
   const [offset, setOffset] = useState(0);
-
   useEffect(() => {
-    const onScroll = () => setOffset(window.scrollY);
-    window.addEventListener("scroll", onScroll);
-    return () => window.removeEventListener("scroll", onScroll);
+    const handleScroll = () => {
+      const y = window.scrollY;
+      setScrolled(prev => (prev ? y > 20 : y > 40));
+      setOffset(y);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
   
   // API data state
@@ -245,41 +243,39 @@ export default function App() {
   const ONBOARDING = {
     es: {
       title: "Guía de uso",
-      sub: "Esta herramienta digitaliza el autodiagnóstico de la Guía PMUS Argentina. Antes de empezar, aquí te explicamos cómo está estructurada.",
+      sub: "Diagnóstico de movilidad urbana en 6 dimensiones basado en la Guía PMUS Argentina.",
       sections: [
-        { label: "Diagnóstico por dimensión", desc: "El cuestionario evalúa 6 dimensiones institucionales de la movilidad: Normativa, Planificación, Movilidad Activa, Transporte Público, Tecnología y Seguridad Vial. Cada respuesta suma puntos según la escala de la Guía." },
-        { label: "Sistema de puntaje", desc: "Sí = 3 pts · Parcial = 2 pts · No = 0 pts · Porcentaje: 0–25% = 0, 25–50% = 1, 50–75% = 2, +75% = 3. El puntaje final por dimensión indica el nivel de riesgo: Bajo (≥75%), Moderado (50–75%), Alto (25–50%), Crítico (<25%)." },
-        { label: "Catálogo de medidas (A–G)", desc: "El panel derecho muestra las 33 medidas de la Guía PMUS organizadas en 7 grupos temáticos (A: Movilidad de pie, B: Bicicletas, C: Transporte Público, D: Gestión Vial, E: Carga, F: Tecnología, G: Desarrollo Urbano). Haz clic en cualquier código para ver su descripción." },
-        { label: "Recomendaciones post-diagnóstico", desc: "Al finalizar el cuestionario, el sistema identificará automáticamente las dimensiones con puntaje inferior al 50% y sugerirá las medidas PMUS más relevantes para mejorar esos indicadores." },
+        { label: "6 dimensiones", desc: "Normativa · Planificación · Movilidad Activa · Transporte Público · Tecnología · Seguridad Vial" },
+        { label: "Puntaje", desc: "Sí = 3 pts · Parcial = 2 pts · No = 0 pts. Riesgo: Bajo ≥75% · Moderado 50–75% · Alto 25–50% · Crítico <25%" },
+        { label: "Medidas (A–G)", desc: "33 medidas PMUS en 7 grupos temáticos." },
+        { label: "Recomendaciones", desc: "Al finalizar, el sistema identifica dimensiones con puntaje <50% y sugiere las medidas más relevantes." },
       ],
-      cardTitle: "Estructura de cada medida",
+      cardTitle: "Cada medida incluye",
       cardItems: [
-        { label: "Identificador", desc: "Código único (ej. A1, B3, C2)" },
-        { label: "Tipos de intervención", desc: "Infraestructura · Legales y/o Regulatorios · Servicios · Comunicación" },
-        { label: "Horizonte de implementación", desc: "Corto / Mediano / Largo plazo" },
-        { label: "Costo económico", desc: "Bajo / Medio / Alto" },
-        { label: "Ámbito de aplicación", desc: "RMBA · Grandes Aglomerados · Ciudades intermedias · Localidades pequeñas" },
-        { label: "Enfoque ECM", desc: "Evitar viajes motorizados · Cambiar a modos sostenibles · Mejorar eficiencia" },
+        { label: "Código", desc: "Identificador único (ej. A1, B3)" },
+        { label: "Tipo", desc: "Infraestructura · Regulatorio · Servicios · Comunicación" },
+        { label: "Horizonte", desc: "Corto / Mediano / Largo plazo" },
+        { label: "Costo", desc: "Bajo / Medio / Alto" },
+        { label: "Enfoque ECM", desc: "Evitar · Cambiar · Mejorar" },
       ],
       btn: "Entendido, comenzar ››",
     },
     en: {
-      title: "How to use this tool",
-      sub: "This tool digitises the self-assessment from the Argentina SUMP Guide. Here is how it is structured before you begin.",
+      title: "How to use",
+      sub: "Urban mobility diagnostic across 6 dimensions, based on the Argentina SUMP Guide.",
       sections: [
-        { label: "Assessment by dimension", desc: "The questionnaire evaluates 6 institutional mobility dimensions: Regulations, Planning, Active Mobility, Public Transport, Technology and Road Safety. Each answer adds points on the Guide's scoring scale." },
-        { label: "Scoring system", desc: "Yes = 3 pts · Partial = 2 pts · No = 0 pts · Percentage: 0–25% = 0, 25–50% = 1, 50–75% = 2, >75% = 3. The final score per dimension indicates risk level: Low (≥75%), Moderate (50–75%), High (25–50%), Critical (<25%)." },
-        { label: "Measures catalogue (A–G)", desc: "The right panel shows the 33 SUMP Guide measures in 7 thematic groups (A: Walking, B: Cycling, C: Public Transport, D: Road Management, E: Freight, F: Technology, G: Urban Development). Click any code to see its description." },
-        { label: "Post-assessment recommendations", desc: "After completing the questionnaire, the system will identify dimensions scoring below 50% and automatically suggest the most relevant SUMP measures to address those gaps." },
+        { label: "6 dimensions", desc: "Regulations · Planning · Active Mobility · Public Transport · Technology · Road Safety" },
+        { label: "Scoring", desc: "Yes = 3 pts · Partial = 2 pts · No = 0 pts. Risk: Low ≥75% · Moderate 50–75% · High 25–50% · Critical <25%" },
+        { label: "Measures (A–G)", desc: "33 SUMP measures in 7 thematic groups." },
+        { label: "Recommendations", desc: "After completing, the system identifies dimensions scoring below 50% and suggests the most relevant measures." },
       ],
-      cardTitle: "Structure of each measure card",
+      cardTitle: "Each measure includes",
       cardItems: [
-        { label: "Identifier", desc: "Unique code (e.g. A1, B3, C2)" },
-        { label: "Intervention types", desc: "Infrastructure · Legal / Regulatory · Services · Communication" },
-        { label: "Implementation timeline", desc: "Short / Medium / Long term" },
-        { label: "Economic cost", desc: "Low / Medium / High" },
-        { label: "Area of application", desc: "Metro Area · Large Agglomerations · Mid-size cities · Small towns" },
-        { label: "ECM framework", desc: "Avoid motorised trips · Shift to sustainable modes · Improve efficiency" },
+        { label: "Code", desc: "Unique identifier (e.g. A1, B3)" },
+        { label: "Type", desc: "Infrastructure · Regulatory · Services · Communication" },
+        { label: "Timeline", desc: "Short / Medium / Long term" },
+        { label: "Cost", desc: "Low / Medium / High" },
+        { label: "ECM framework", desc: "Avoid · Shift · Improve" },
       ],
       btn: "Got it, start ››",
     },

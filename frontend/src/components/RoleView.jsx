@@ -1,3 +1,8 @@
+import { Building2, Landmark, GraduationCap } from "lucide-react";
+import { TEAL, MUTED } from "../theme.js";
+
+const ICONS = { municipio: Building2, organismo: Landmark, osc: GraduationCap };
+
 export default function RoleView({ lang, userRole, setUserRole, onBack, onNext, s }) {
   return (
     <div style={{ ...s.card, maxWidth: 560 }}>
@@ -9,14 +14,23 @@ export default function RoleView({ lang, userRole, setUserRole, onBack, onNext, 
           { id: "municipio", es: "Municipio / Secretaría de Transporte", en: "Municipality / Transport Department", sub: { es: "Gobierno local responsable de la movilidad urbana", en: "Local government responsible for urban mobility" } },
           { id: "organismo", es: "Organismo provincial o nacional", en: "Provincial or national body", sub: { es: "Entidad pública que evalúa ciudades bajo su jurisdicción", en: "Public entity evaluating cities under its jurisdiction" } },
           { id: "osc", es: "Organización de la sociedad civil / Academia", en: "Civil society organisation / Academia", sub: { es: "ONG, consultora o institución de investigación", en: "NGO, consultancy or research institution" } },
-        ].map(r => (
-          <button key={r.id}
-            style={{ ...s.roleCard, ...(userRole === r.id ? s.roleCardActive : {}) }}
-            onClick={() => setUserRole(r.id)}>
-            <div style={s.roleCardTitle}>{r[lang]}</div>
-            <div style={s.roleCardSub}>{r.sub[lang]}</div>
-          </button>
-        ))}
+        ].map(r => {
+          const Icon = ICONS[r.id];
+          const active = userRole === r.id;
+          return (
+            <button key={r.id}
+              style={{ ...s.roleCard, ...(active ? s.roleCardActive : {}), display: "flex", alignItems: "flex-start", gap: 14 }}
+              onClick={() => setUserRole(r.id)}>
+              <div style={{ marginTop: 2, flexShrink: 0 }}>
+                <Icon size={20} color={active ? TEAL : MUTED} strokeWidth={1.75} />
+              </div>
+              <div>
+                <div style={s.roleCardTitle}>{r[lang]}</div>
+                <div style={s.roleCardSub}>{r.sub[lang]}</div>
+              </div>
+            </button>
+          );
+        })}
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
         <button style={s.btnOutline} onClick={onBack}>{lang === "es" ? "‹‹ Volver" : "‹‹ Back"}</button>
