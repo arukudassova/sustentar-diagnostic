@@ -64,10 +64,10 @@ async def get_spatial_data(city_name: str):
         # 3. Query correct Geoapify categories
         # See: https://apidocs.geoapify.com/docs/places/#categories
         categories = {
-            "cycleways":    "mobility.bicycle",
-            "bike_parking": "service.vehicle.bicycle.parking",
-            "bike_share":   "service.vehicle.bicycle.rental",
-            "pedestrian":   "pedestrian",
+            "cycleways":    "highway.cycleway",
+            "bike_parking": "parking.bicycles",
+            "bike_share":   "rental.bicycle",
+            "pedestrian":   "highway.pedestrian",
             "bus_stops":    "public_transport.bus",
         }
 
@@ -83,6 +83,8 @@ async def get_spatial_data(city_name: str):
                 }
             )
             data = res.json()
+            if "error" in data or res.status_code != 200:
+                raise HTTPException(status_code=502, detail=f"Geoapify error for {key}: {data.get('message', res.status_code)}")
             count = len(data.get("features", []))
             counts[key] = count
             print(f"{key} ({category}): {count}")
