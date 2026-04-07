@@ -1,7 +1,7 @@
 export default function IntroView({
   lang, t, cats, CITIES_DATA, MEASURES_DATA,
   cityName, setCityName, introTab, setIntroTab,
-  selectedTile, setSelectedTile, totalQ, onStart, s
+  selectedTile, setSelectedTile, onStart, s
 }) {
   return (
     <div style={{ maxWidth: 820, margin: "0 auto" }}>
@@ -14,7 +14,6 @@ export default function IntroView({
         </div>
 
         <p style={s.desc}>{t.introDesc}</p>
-        <div style={{ ...s.sourceNote, marginBottom: 20 }}>{t.source}</div>
 
         {/* TABS */}
         <div style={s.introTabBar}>
@@ -47,7 +46,6 @@ export default function IntroView({
               disabled={!cityName.trim()} onClick={onStart}>
               {t.startBtn}
             </button>
-            <p style={s.hint}>{t.hint(totalQ, cats.length)}</p>
           </div>
         )}
 

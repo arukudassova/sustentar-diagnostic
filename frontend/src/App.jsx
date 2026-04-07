@@ -428,7 +428,7 @@ export default function App() {
             cityName={cityName} setCityName={setCityName}
             introTab={introTab} setIntroTab={setIntroTab}
             selectedTile={selectedTile} setSelectedTile={setSelectedTile}
-            totalQ={totalQ} onStart={() => setStep("role")} s={s}
+            onStart={() => setStep("role")} s={s}
           />
         )}
 
