@@ -1,6 +1,14 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase.js";
 import html2pdf from "html2pdf.js";
+import useApiData from "./hooks/useApiData.js";
+import s from "./styles/appStyles.js";
+import useQuiz from "./hooks/useQuiz.js";
+import ResultsView from "./components/ResultsView.jsx";
+import IntroView from "./components/IntroView.jsx";
+import RoleView from "./components/RoleView.jsx";
+import CitySizeView from "./components/CitySizeView.jsx";
+import QuizView from "./components/QuizView.jsx";
 
 // Load Lato from Google Fonts
 if (typeof document !== "undefined" && !document.getElementById("sustentar-fonts")) {
@@ -12,166 +20,8 @@ if (typeof document !== "undefined" && !document.getElementById("sustentar-fonts
 }
 
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
-
-
-const LOGO_URL = "/logo.png";
-
-const TEAL = "#2a7a6a";
-const TEAL_LIGHT = "#e8f5f2";
-const TEAL_MID = "#c2e0da";
-const ACCENT = "#4aab93";
-const TEXT = "#2d2926";
-const MUTED = "#7a756f";
-const BORDER = "#d4e8e3";
-const BG = "#f7faf9";
-const WHITE = "#ffffff";
-
-const UI = {
-  es: {
-    headerSub: "Diagnóstico de Movilidad Urbana",
-    banner: "Herramienta de evaluación — Versión prototipo",
-    source: "Basado en el Anexo Capítulo 2 — Guía PMUS Argentina (Sustentar / Ministerio de Transporte)",
-    introTitle: "Evaluación de Movilidad Sostenible Municipal",
-    introDesc: "Esta herramienta diagnostica el estado de la movilidad urbana en ciudades de América Latina, generando un puntaje de riesgo en 6 dimensiones basado en la metodología de la Guía PMUS Argentina (Sustentar / Ministerio de Transporte).",     cityPlaceholder: "— Seleccionar ciudad —",
-    startBtn: "Iniciar diagnóstico →",
-    hint: (q, c) => `${q} preguntas · ${c} dimensiones · ~10 min`,
-    progressLabel: (a, t) => `${a} / ${t} respondidas`,
-    prevBtn: "← Anterior",
-    nextBtn: "Siguiente →",
-    resultsBtn: "Revisar respuestas →",
-    resultsTitle: "Diagnóstico completado",
-    resultsSub: "Resultados por dimensión — Guía PMUS Argentina",
-    totalLabel: "Puntaje global",
-    methodNote: "Metodología basada en el Anexo Capítulo 2 de la Guía para la Planificación de la Movilidad Urbana Sostenible en Argentina (Sustentar / Ministerio de Transporte, 2023). Puntaje: No=0pts · Parcial=2pts · Sí=3pts · Porcentaje: 0–25%=0 · 25–50%=1 · 50–75%=2 · +75%=3",
-    recTitle: "Recomendaciones por resultado",
-    rec: [
-      { range: "0–25%", action: "Se recomienda revisar qué conjunto de medidas de corto plazo pueden mejorar este indicador de manera perentoria o inmediata." },
-      { range: "25–50%", action: "Se recomienda implementar un plan de corto plazo con medidas o acciones que mejoren rápidamente este indicador." },
-      { range: "50–75%", action: "Desarrollar un plan de corto/mediano plazo con aquellas acciones necesarias para mejorar este indicador." },
-      { range: "75–100%", action: "Desarrollar un plan de mediano/largo plazo con acciones que potencien la movilidad sostenible en su conjunto." },
-    ],
-    editBtn: "← Editar respuestas",
-    newBtn: "Nuevo diagnóstico",
-    riskLow: "Bajo", riskMod: "Moderado", riskHigh: "Alto", riskCrit: "Crítico",
-    riskPrefix: "Riesgo ",
-    pts: "pts",
-    downloadBtn: "Descargar informe",
-  },
-  en: {
-    headerSub: "Urban Mobility Diagnostic",
-    banner: "Assessment tool — Prototype version",
-    source: "Based on Annex Chapter 2 — SUMP Guide Argentina (Sustentar / Ministry of Transport)",
-    introTitle: "Municipal Sustainable Mobility Assessment",
-    introDesc: "This tool diagnoses the state of urban mobility in Latin American cities, generating a risk score across 6 dimensions based on the methodology of the PMUS Argentina Guide (Sustentar / Ministry of Transport).",    cityLabel: "City to assess",
-    cityPlaceholder: "— Select a city —",
-    startBtn: "Start diagnostic →",
-    hint: (q, c) => `${q} questions · ${c} dimensions · ~10 min`,
-    progressLabel: (a, t) => `${a} / ${t} answered`,
-    prevBtn: "← Previous",
-    nextBtn: "Next →",
-    resultsBtn: "Review answers →",
-    resultsTitle: "Diagnostic complete",
-    resultsSub: "Results by dimension — SUMP Guide Argentina",
-    totalLabel: "Overall score",
-    methodNote: "Methodology based on Annex Chapter 2 of the Sustainable Urban Mobility Planning Guide for Argentina (Sustentar / Ministry of Transport, 2023). Scoring: No=0pts · Partial=2pts · Yes=3pts · Percentage: 0–25%=0 · 25–50%=1 · 50–75%=2 · >75%=3",
-    recTitle: "Recommendations by result",
-    rec: [
-      { range: "0–25%", action: "Review which short-term measures can urgently improve this indicator." },
-      { range: "25–50%", action: "Implement a short-term plan with actions that quickly improve this indicator." },
-      { range: "50–75%", action: "Develop a short/medium-term plan with the actions needed to improve this indicator." },
-      { range: "75–100%", action: "Develop a medium/long-term plan with actions that enhance sustainable mobility as a whole." },
-    ],
-    editBtn: "← Edit answers",
-    newBtn: "New diagnostic",
-    riskLow: "Low", riskMod: "Moderate", riskHigh: "High", riskCrit: "Critical",
-    riskPrefix: "Risk: ",
-    pts: "pts",
-    downloadBtn: "Download report",
-  },
-};
-
-function getRiskLevel(pct, lang) {
-  const t = UI[lang];
-  if (pct >= 75) return { label: t.riskLow, color: "#1a7a4a", bg: "#dcf5e7", dot: "#22c55e" };
-  if (pct >= 50) return { label: t.riskMod, color: "#8a6200", bg: "#fef3c7", dot: "#f59e0b" };
-  if (pct >= 25) return { label: t.riskHigh, color: "#9a3a00", bg: "#ffedd5", dot: "#f97316" };
-  return { label: t.riskCrit, color: "#9a1a1a", bg: "#fee2e2", dot: "#ef4444" };
-}
-
-function RadialScore({ pct, color, size = 80 }) {
-  const r = size / 2 - 8;
-  const circ = 2 * Math.PI * r;
-  const dash = (pct / 100) * circ;
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={BORDER} strokeWidth="7" />
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth="7"
-        strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
-        transform={`rotate(-90 ${size/2} ${size/2})`} />
-      <text x={size/2} y={size/2+5} textAnchor="middle" fontSize="13" fontWeight="700" fill={color} fontFamily="sans-serif">
-        {Math.round(pct)}%
-      </text>
-    </svg>
-  );
-}
-
-function LangToggle({ lang, setLang }) {
-  return (
-    <div style={s.langToggle}>
-      <button style={{ ...s.langBtn, ...(lang === "es" ? s.langBtnActive : {}) }} onClick={() => setLang("es")}>ES</button>
-      <button style={{ ...s.langBtn, ...(lang === "en" ? s.langBtnActive : {}) }} onClick={() => setLang("en")}>EN</button>
-    </div>
-  );
-}
-
-function Header({ lang, setLang, onHelp }) {
-  const [scrolled, setScrolled] = useState(false);
-    useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 30);
-    };
-
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-  return (
-    <div style={{
-      ...s.header,
-      padding: scrolled ? "8px 16px" : "16px 24px",
-      height: scrolled ? 60 : 90,
-      transition: "all 0.3s ease",
-      position: "sticky",
-      top: 0,
-      zIndex: 1000,
-      background: "#fff",
-      boxShadow: scrolled ? "0 2px 8px rgba(0,0,0,0.05)" : "none"
-    }}>
-      <img
-        src={LOGO_URL}
-        alt="Sustentar"
-        style={{
-        height: scrolled ? 18 : 28,
-        maxHeight: scrolled ? 18 : 28,
-        width: "auto",
-        objectFit: "contain",
-        transition: "all 0.3s ease",
-        display: "block",
-        cursor: "pointer"
-      }}
-      onClick={reset}
-          />
-      <div style={s.headerDiv} />
-      <span style={s.headerSub}>{UI[lang].headerSub}</span>
-      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-        {onHelp && (
-          <button style={s.helpBtn} onClick={onHelp} title={lang === "es" ? "Cómo usar" : "How to use"}>?</button>
-        )}
-        <LangToggle lang={lang} setLang={setLang} />
-      </div>
-    </div>
-  );
-}
+import { API_URL, LOGO_URL, TEAL, TEAL_LIGHT, TEAL_MID, ACCENT, BORDER, UI } from "./theme.js";
+import Header, { LangToggle } from "./components/Header.jsx";
 
 export default function App() {
   console.log("FRONTEND APP RUNNING");
@@ -208,11 +58,7 @@ export default function App() {
   }, []);
   
   // API data state
-  const [apiCities, setApiCities] = useState(null);
-  const [apiQuestions, setApiQuestions] = useState(null);
-  const [apiMeasures, setApiMeasures] = useState(null);
-  const [apiLoading, setApiLoading] = useState(true);
-  const [apiError, setApiError] = useState(false);
+  const { apiCities, apiQuestions, apiMeasures, apiLoading, apiError } = useApiData(lang);
 
   function downloadReport() {
     const element = document.getElementById("report");
@@ -374,27 +220,13 @@ export default function App() {
 
   const t = UI[lang];
   const cats = CATEGORIES_DATA;
+  const { catPct, catRaw, totalPct, getSuggestedMeasures } = useQuiz({ cats, MEASURES_DATA });
   const totalQ = cats.flatMap((c) => c.questions).length;
   const answered = Object.keys(answers).length;
   const currentCat = cats[catIdx];
   const catDone = currentCat?.questions.every((q) => answers[q.id] !== undefined);
 
   function answer(qId, score) { setAnswers((p) => ({ ...p, [qId]: score })); }
-
-  function catPct(cat) {
-    const raw = cat.questions.reduce((sum, q) => sum + (answers[q.id] ?? 0), 0);
-    return Math.round((raw / cat.maxScore) * 100);
-  }
-
-  function catRaw(cat) {
-    return cat.questions.reduce((sum, q) => sum + (answers[q.id] ?? 0), 0);
-  }
-
-  function totalPct() {
-    const totalMax = cats.reduce((sum, c) => sum + c.maxScore, 0);
-    const raw = Object.values(answers).reduce((a, b) => a + b, 0);
-    return Math.round((raw / totalMax) * 100);
-  }
 
   function submitFeedback() {
     if (!fbMessage.trim()) return;
@@ -405,26 +237,6 @@ export default function App() {
   }
 
     function reset() { setStep("intro"); setAnswers({}); setCatIdx(0); setCityName(""); setSelectedTile(null); setUserRole(null); setCitySize(null); setFbSubmitted(false); }
-
-  function getSuggestedMeasures() {
-    const lowCats = cats.filter((cat) => {
-      const raw = cat.questions.reduce((sum, q) => sum + (answers[q.id] ?? 0), 0);
-      return Math.round((raw / cat.maxScore) * 100) < 50;
-    }).map(c => c.id);
-
-    // Use diagCats field from each measure to find relevant ones
-    const result = [];
-    for (const grp of MEASURES_DATA) {
-      const matches = grp.measures.filter(m =>
-        m.diagCats && m.diagCats.some(cat => lowCats.includes(cat))
-      );
-      if (matches.length === 0) continue;
-      const limit = result.length === 0 ? 2 : 1;
-      result.push(...matches.slice(0, limit));
-      if (result.length >= 6) break;
-    }
-    return result.slice(0, 6);
-  }
 
   function skipToResults() {
     setStep("review");
@@ -449,7 +261,7 @@ export default function App() {
         { label: "Ámbito de aplicación", desc: "RMBA · Grandes Aglomerados · Ciudades intermedias · Localidades pequeñas" },
         { label: "Enfoque ECM", desc: "Evitar viajes motorizados · Cambiar a modos sostenibles · Mejorar eficiencia" },
       ],
-      btn: "Entendido, comenzar →",
+      btn: "Entendido, comenzar ››",
     },
     en: {
       title: "How to use this tool",
@@ -469,7 +281,7 @@ export default function App() {
         { label: "Area of application", desc: "Metro Area · Large Agglomerations · Mid-size cities · Small towns" },
         { label: "ECM framework", desc: "Avoid motorised trips · Shift to sustainable modes · Improve efficiency" },
       ],
-      btn: "Got it, start →",
+      btn: "Got it, start ››",
     },
   };
 
@@ -487,7 +299,7 @@ export default function App() {
               <img src={LOGO_URL} alt="Sustentar" style={{ height: 26, objectFit: "contain" }} />
               <div style={s.onboardHeaderDiv} />
               <span style={s.onboardHeaderSub}>{ONBOARDING[lang].title}</span>
-              <div style={{ marginLeft: "auto" }}><LangToggle lang={lang} setLang={setLang} /></div>
+              <div style={{ marginLeft: "auto" }}><LangToggle lang={lang} setLang={setLang} s={s} /></div>
             </div>
             <p style={s.onboardSub}>{ONBOARDING[lang].sub}</p>
             <div style={s.onboardGrid}>
@@ -538,55 +350,12 @@ export default function App() {
       )}
 
       {/* STICKY HEADER */}
-    <header style={{
-      ...s.stickyHeader,
-      height: scrolled ? 60 : 90,
-      padding: "0 24px",
-      display: "flex",
-      alignItems: "center",
-      transition: "all 0.3s ease",
-
-      background: scrolled
-        ? "#ffffff"
-        : "linear-gradient(to bottom, rgba(0,0,0,0.55), rgba(0,0,0,0.15))",
-
-      color: scrolled ? "#000" : "#fff",
-
-      boxShadow: scrolled ? "0 4px 16px rgba(0,0,0,0.08)" : "none"
-    }}>
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            width: "100%"
-          }}>
-          <img
-            src={LOGO_URL}
-            alt="Sustentar"
-            style={{
-              height: scrolled ? 22 : 32,
-              filter: scrolled ? "none" : "brightness(0) invert(1)",
-              transition: "all 0.3s ease"
-            }}
-            onClick={reset}
-          />
-
-            {isQuizActive && cityName && (
-              <span style={s.navCityBadge}>{cityName}</span>
-            )}
-
-            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-              {isQuizActive && (
-                <button style={s.navRestartBtn} onClick={reset}>
-                  {lang === "es" ? "← Inicio" : "← Home"}
-                </button>
-              )}
-              <button style={s.helpBtn} onClick={() => setShowOnboarding(true)}>
-                ?
-              </button>
-              <LangToggle lang={lang} setLang={setLang} />
-            </div>
-          </div>
-        </header>
+      <Header
+        lang={lang} setLang={setLang}
+        scrolled={scrolled} isQuizActive={isQuizActive}
+        cityName={cityName} onReset={reset}
+        onHelp={() => setShowOnboarding(true)} s={s}
+      />
 
       {/* HERO — intro only */}
       {step === "intro" && (
@@ -653,241 +422,44 @@ export default function App() {
 
         {/* INTRO */}
         {step === "intro" && (
-          <div style={{ maxWidth: 680, margin: "0 auto" }}>
-            <div style={s.card}>
-              {/* STATS INSIDE BOX */}
-              <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
-                <span style={s.chip}>52 {lang === "es" ? "preguntas" : "questions"}</span>
-                <span style={s.chip}>6 {lang === "es" ? "dimensiones" : "dimensions"}</span>
-                <span style={s.chip}>~10 min</span>
-              </div>
-
-              <p style={s.desc}>{t.introDesc}</p>
-              <div style={{ ...s.sourceNote, marginBottom: 20 }}>{t.source}</div>
-
-              {/* TABS */}
-              <div style={s.introTabBar}>
-                {[
-                  { id: "tool", es: "Sobre la herramienta", en: "About the tool" },
-                  { id: "measures", es: "Glosario", en: "Glossary" },
-                ].map(tab => (
-                  <button key={tab.id}
-                    style={{ ...s.introTabBtn, ...(introTab === tab.id ? s.introTabBtnActive : {}) }}
-                    onClick={() => setIntroTab(tab.id)}>
-                    {tab[lang]}
-                  </button>
-                ))}
-              </div>
-
-              {/* TAB: ABOUT THE TOOL */}
-              {introTab === "tool" && (
-                <div style={s.introTabContent}>
-                  <div style={s.chips}>{cats.map((c) => <span key={c.id} style={s.chip}>{c.label}</span>)}</div>
-                  <label style={{ ...s.label, marginTop: 4 }}>{t.cityLabel}</label>
-                  <select style={s.select} value={cityName} onChange={(e) => setCityName(e.target.value)}>
-                    <option value="">{t.cityPlaceholder}</option>
-                    {CITIES_DATA.map(g => (
-                      <optgroup key={g.country} label={g.country}>
-                        {g.cities.map(c => <option key={c} value={c}>{c}</option>)}
-                      </optgroup>
-                    ))}
-                  </select>
-                  <button style={{ ...s.btnPrimary, opacity: cityName.trim() ? 1 : 0.4, cursor: cityName.trim() ? "pointer" : "default" }}
-                    disabled={!cityName.trim()} onClick={() => setStep("role")}>
-                    {t.startBtn}
-                  </button>
-                  <p style={s.hint}>{t.hint(totalQ, cats.length)}</p>
-                </div>
-              )}
-
-              {/* TAB: PMUS MEASURES */}
-              {introTab === "measures" && (
-                <div style={s.introTabContent}>
-                  <p style={{ ...s.desc, marginBottom: 16 }}>{lang === "es" ? "Las 33 medidas de la Guía PMUS organizadas en 7 grupos temáticos. Haz clic en cualquier código para ver su descripción." : "The 33 SUMP Guide measures in 7 thematic groups. Click any code to see its description."}</p>
-                  {MEASURES_DATA.map(g => (
-                    <div key={g.group} style={s.tileGroup}>
-                      <div style={{ ...s.tileGroupLabel, color: g.color }}>{g.group} · {typeof g.label === "object" ? g.label[lang] : g.label}</div>
-                      <div style={s.tileRow}>
-                        {g.measures.map(m => (
-                          <button key={m.code}
-                            style={{ ...s.tile, background: selectedTile?.code === m.code ? g.color : g.bg, borderColor: g.color + "88", color: selectedTile?.code === m.code ? "#fff" : g.color }}
-                            onClick={() => setSelectedTile(selectedTile?.code === m.code ? null : { ...m, groupColor: g.color, groupBg: g.bg, groupLight: g.light })}>
-                            {m.code}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          <IntroView
+            lang={lang} t={t} cats={cats}
+            CITIES_DATA={CITIES_DATA} MEASURES_DATA={MEASURES_DATA}
+            cityName={cityName} setCityName={setCityName}
+            introTab={introTab} setIntroTab={setIntroTab}
+            selectedTile={selectedTile} setSelectedTile={setSelectedTile}
+            totalQ={totalQ} onStart={() => setStep("role")} s={s}
+          />
         )}
 
 
         {/* ROLE SELECTION */}
         {step === "role" && (
-          <div style={{ ...s.card, maxWidth: 560 }}>
-            <div style={s.stepProgress}>{lang === "es" ? "Paso 1 de 2" : "Step 1 of 2"}</div>
-            <h2 style={s.h2}>{lang === "es" ? "¿Quién realiza este diagnóstico?" : "Who is completing this assessment?"}</h2>
-            <p style={{ ...s.desc, marginBottom: 24 }}>{lang === "es" ? "Solo para registro — no afecta el puntaje." : "For our records only — does not affect scoring."}</p>
-            <div style={s.roleGrid}>
-              {[
-                { id: "municipio", es: "Municipio / Secretaría de Transporte", en: "Municipality / Transport Department", sub: { es: "Gobierno local responsable de la movilidad urbana", en: "Local government responsible for urban mobility" } },
-                { id: "organismo", es: "Organismo provincial o nacional", en: "Provincial or national body", sub: { es: "Entidad pública que evalúa ciudades bajo su jurisdicción", en: "Public entity evaluating cities under its jurisdiction" } },
-                { id: "osc", es: "Organización de la sociedad civil / Academia", en: "Civil society organisation / Academia", sub: { es: "ONG, consultora o institución de investigación", en: "NGO, consultancy or research institution" } },
-              ].map(r => (
-                <button key={r.id}
-                  style={{ ...s.roleCard, ...(userRole === r.id ? s.roleCardActive : {}) }}
-                  onClick={() => setUserRole(r.id)}>
-                  <div style={s.roleCardTitle}>{r[lang]}</div>
-                  <div style={s.roleCardSub}>{r.sub[lang]}</div>
-                </button>
-              ))}
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
-              <button style={s.btnOutline} onClick={() => setStep("intro")}>{lang === "es" ? "← Volver" : "← Back"}</button>
-              <button style={{ ...s.btnPrimary, width: "auto", padding: "10px 28px", opacity: userRole ? 1 : 0.4, cursor: userRole ? "pointer" : "default" }} disabled={!userRole} onClick={() => setStep("citysize")}>
-                {lang === "es" ? "Siguiente →" : "Next →"}
-              </button>
-            </div>
-          </div>
+          <RoleView
+            lang={lang} userRole={userRole} setUserRole={setUserRole}
+            onBack={() => setStep("intro")} onNext={() => setStep("citysize")} s={s}
+          />
         )}
 
         {/* CITY SIZE SELECTION */}
         {step === "citysize" && (
-          <div style={{ ...s.card, maxWidth: 560 }}>
-            <div style={s.stepProgress}>{lang === "es" ? "Paso 2 de 2" : "Step 2 of 2"}</div>
-            <h2 style={s.h2}>{lang === "es" ? "¿Cuál es el tamaño de la ciudad?" : "What is the size of the city?"}</h2>
-            <p style={{ ...s.desc, marginBottom: 24 }}>{lang === "es" ? "Esto adapta los umbrales de evaluación según la Guía PMUS." : "This adapts the assessment thresholds according to the SUMP Guide."}</p>
-            <div style={s.roleGrid}>
-              {[
-                { id: "grande", es: "Gran aglomerado", en: "Large agglomeration", sub: { es: "Más de 500.000 habitantes", en: "More than 500,000 inhabitants" } },
-                { id: "intermedia", es: "Ciudad intermedia", en: "Mid-size city", sub: { es: "Entre 50.000 y 500.000 habitantes", en: "Between 50,000 and 500,000 inhabitants" } },
-                { id: "pequena", es: "Localidad pequeña", en: "Small town", sub: { es: "Menos de 50.000 habitantes", en: "Less than 50,000 inhabitants" } },
-              ].map(r => (
-                <button key={r.id}
-                  style={{ ...s.roleCard, ...(citySize === r.id ? s.roleCardActive : {}) }}
-                  onClick={() => setCitySize(r.id)}>
-                  <div style={s.roleCardTitle}>{r[lang]}</div>
-                  <div style={s.roleCardSub}>{r.sub[lang]}</div>
-                </button>
-              ))}
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
-              <button style={s.btnOutline} onClick={() => setStep("role")}>{lang === "es" ? "← Volver" : "← Back"}</button>
-              <button style={{ ...s.btnPrimary, width: "auto", padding: "10px 28px", opacity: citySize ? 1 : 0.4, cursor: citySize ? "pointer" : "default" }} disabled={!citySize} onClick={() => setStep("quiz")}>
-                {lang === "es" ? "Iniciar diagnóstico →" : "Start assessment →"}
-              </button>
-            </div>
-          </div>
+          <CitySizeView
+            lang={lang} citySize={citySize} setCitySize={setCitySize}
+            onBack={() => setStep("role")} onNext={() => setStep("quiz")} s={s}
+          />
         )}
 
         {/* QUIZ */}
         {step === "quiz" && (
-          <div style={{ ...s.card, maxWidth: 760 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-              <span style={{ color: TEAL, fontSize: 13, fontWeight: 600 }}>{cityName}</span>
-              <span style={{ color: MUTED, fontSize: 12 }}>{t.progressLabel(answered, totalQ)}</span>
-            </div>
-            <div style={s.progressBar}><div style={{ ...s.progressFill, width: `${(answered / totalQ) * 100}%` }} /></div>
-            <div style={s.tabRow}>
-              {cats.map((c, i) => {
-                const done = c.questions.every((q) => answers[q.id] !== undefined);
-                const active = i === catIdx;
-                return (
-                  <button key={c.id} style={{ ...s.tab, ...(active ? s.tabActive : {}), ...(done && !active ? s.tabDone : {}) }} onClick={() => setCatIdx(i)}>
-                    <span style={{ fontSize: 11, fontWeight: 700 }}>{c.id.slice(0,2).toUpperCase()}</span>
-                    {done && <span style={s.checkPin}>✓</span>}
-                  </button>
-                );
-              })}
-              <span style={s.tabLabel}>{currentCat.label}</span>
-            </div>
-            <div style={{ marginBottom: 24 }}>
-              {/* OSM PANEL — only on Active Mobility and Transport tabs */}
-              {(currentCat.id === "movilidad_activa" || currentCat.id === "transporte") && !osmResult && (
-                <div style={{ ...s.osmPanel, marginBottom: 16 }}>
-                  <div style={s.osmPanelTop}>
-                    <div>
-                      <div style={s.osmPanelTitle}>{lang === "es" ? "Pre-completar desde OpenStreetMap" : "Pre-fill from OpenStreetMap"}</div>
-                      <div style={s.osmPanelSub}>{lang === "es" ? "Auto-completa preguntas de infraestructura con datos espaciales reales" : "Auto-fill infrastructure questions with real spatial data"}</div>
-                    </div>
-                    <button style={{ ...s.osmBtn, opacity: osmLoading ? 0.6 : 1, cursor: osmLoading ? "default" : "pointer" }} disabled={osmLoading} onClick={fetchOSMData}>
-                      {osmLoading ? (lang === "es" ? "Consultando..." : "Querying...") : (lang === "es" ? "Analizar ciudad" : "Analyse city")}
-                    </button>
-                  </div>
-                </div>
-              )}
-              {osmResult && !osmResult.error && (
-                <div style={{ ...s.osmPanel, marginBottom: 16 }}>
-                  <div style={s.osmResultTitle}>{lang === "es" ? `✓ ${osmResult.filledCount} respuestas pre-completadas desde OpenStreetMap` : `✓ ${osmResult.filledCount} answers pre-filled from OpenStreetMap`}</div>
-                  <div style={s.osmResultGrid}>
-                    {osmResult.fields.map(f => (
-                      <div key={f.id} style={s.osmResultRow}>
-                        <span style={s.osmResultLabel}>{f.label}</span>
-                        <span style={s.osmResultVal}>{f.value} {f.unit}</span>
-                        <span style={{ ...s.osmResultScore, background: f.score === 3 ? "#dcf5e7" : f.score === 2 ? "#fef3c7" : "#fee2e2", color: f.score === 3 ? "#1a7a4a" : f.score === 2 ? "#8a6200" : "#9a1a1a" }}>{f.score} pts</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={s.osmAttrib}>{lang === "es" ? "Datos basados en OpenStreetMap · overpass-api.de" : "Data based on OpenStreetMap · overpass-api.de"}</div>
-                </div>
-              )}
-              {currentCat.questions.map((q, qi) => {
-                const osmFilled = osmResult && !osmResult.error && osmResult.fields.some(f => f.id === q.id);
-                return (
-                  <div key={q.id} style={s.qBlock}>
-                    <p style={s.qText}>
-                      <span style={s.qNum}>{qi + 1}.</span> {q.text}
-                      {osmFilled && <span style={s.osmBadge}>OSM</span>}
-                    </p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      {q.options.map((opt) => {
-                        const sel = answers[q.id] === opt.score;
-                        return (
-                          <button key={opt.score} style={{ ...s.opt, ...(sel ? s.optSel : {}), ...(sel && osmFilled ? { borderColor: "#0a9ea0", background: "#f0fbfb", color: "#0a7a7a" } : {}) }} onClick={() => answer(q.id, opt.score)}>
-                            <span style={{ ...s.radio, ...(sel ? s.radioSel : {}), ...(sel && osmFilled ? { background: "#0a9ea0", borderColor: "#0a9ea0" } : {}) }} />
-                            <span style={{ flex: 1 }}>{opt.label}</span>
-                            <span style={{ fontSize: 11, color: sel ? (osmFilled ? "#0a9ea0" : TEAL) : MUTED, fontWeight: 600 }}>{opt.score} {t.pts}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <button style={s.btnOutline} onClick={reset}>{lang === "es" ? "← Inicio" : "← Home"}</button>
-              <button style={{ ...s.btnOutline, opacity: catIdx === 0 ? 0.3 : 1 }} disabled={catIdx === 0} onClick={() => setCatIdx((i) => i - 1)}>{t.prevBtn}</button>
-              <button style={{ ...s.btnSkip, marginTop: 0, width: "auto" }} onClick={() => setStep("review")}>{lang === "es" ? "Finalizar →" : "Finalise →"}</button>
-              {catIdx < cats.length - 1
-                ? <button style={{ ...s.btnPrimary, opacity: 1, cursor: "pointer" }} onClick={() => {
-                    const unanswered = currentCat.questions.filter(q => answers[q.id] === undefined).length;
-                    if (unanswered > 0) {
-                      const msg = lang === "es"
-                        ? `Tenés ${unanswered} pregunta${unanswered > 1 ? "s" : ""} sin responder en esta sección. ¿Continuar de todas formas?`
-                        : `You have ${unanswered} unanswered question${unanswered > 1 ? "s" : ""} in this section. Continue anyway?`;
-                      if (window.confirm(msg)) setCatIdx((i) => i + 1);
-                    } else {
-                      setCatIdx((i) => i + 1);
-                    }
-                  }}>{t.nextBtn}</button>
-                : <button style={{ ...s.btnPrimary, opacity: 1, cursor: "pointer" }} onClick={() => {
-                    const unanswered = cats.reduce((sum, cat) => sum + cat.questions.filter(q => answers[q.id] === undefined).length, 0);
-                    if (unanswered > 0) {
-                      const msg = lang === "es"
-                        ? `Tenés ${unanswered} pregunta${unanswered > 1 ? "s" : ""} sin responder. ¿Ver resultados de todas formas?`
-                        : `You have ${unanswered} unanswered question${unanswered > 1 ? "s" : ""}. View results anyway?`;
-                      if (window.confirm(msg)) setStep("review");
-                    } else {
-                      setStep("review");
-                    }
-                  }}>{t.resultsBtn}</button>
-              }
-            </div>
-          </div>
+          <QuizView
+            lang={lang} t={t} cats={cats}
+            catIdx={catIdx} setCatIdx={setCatIdx}
+            answers={answers} answer={answer}
+            currentCat={currentCat}
+            osmResult={osmResult} osmLoading={osmLoading} fetchOSMData={fetchOSMData}
+            totalQ={totalQ} answered={answered}
+            onReset={reset} onFinish={() => setStep("review")} s={s}
+          />
         )}
 
         {/* REVIEW */}
@@ -918,164 +490,83 @@ export default function App() {
               </div>
             ))}
             <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
-              <button style={s.btnOutline} onClick={() => { setCatIdx(0); setStep("quiz"); }}>{lang === "es" ? "← Volver al cuestionario" : "← Back to questionnaire"}</button>
-              <button style={s.btnPrimary} onClick={() => setStep("results")}>{lang === "es" ? "Confirmar y ver resultados →" : "Confirm & view results →"}</button>
+              <button style={s.btnOutline} onClick={() => { setCatIdx(0); setStep("quiz"); }}>{lang === "es" ? "‹‹ Volver al cuestionario" : "‹‹ Back to questionnaire"}</button>
+              <button style={s.btnPrimary} onClick={() => setStep("results")}>{lang === "es" ? "Confirmar y ver resultados ››" : "Confirm & view results ››"}</button>
             </div>
           </div>
         )}
 
         {/* RESULTS */}
-        {step === "results" && (() => {
-          if (apiLoading || MEASURES_DATA.length === 0) return <div style={{ padding: 40, color: MUTED, fontSize: 13 }}>{lang === "es" ? "Cargando resultados..." : "Loading results..."}</div>;
-          const total = totalPct();
-          const risk = getRiskLevel(total, lang);
-          const fieldLabel = {
-            tipos: { es: "Tipo de intervención", en: "Intervention type" },
-            horizonte: { es: "Horizonte", en: "Timeline" },
-            costo: { es: "Costo económico", en: "Economic cost" },
-            ambito: { es: "Ámbito de aplicación", en: "Area of application" },
-            ecm: { es: "Enfoque ECM", en: "ECM framework" },
-          };
-          return (
-            <>
-              <div id="report" style={{ ...s.card, maxWidth: 900 }}>
-                <div style={s.resultsTop}>
-                  <div>
-                    <span style={s.cityPill}>{cityName}</span>
-                    <h2 style={s.h2}>{t.resultsTitle}</h2>
-                    <p style={s.desc2}>{t.resultsSub}</p>
-                    {osmResult?.isDemo && (
-                      <div style={{ marginTop: 6, display: "inline-flex", alignItems: "center", gap: 6, background: "#f0fbfb", border: "1px solid #b2e4e4", borderRadius: 5, padding: "3px 10px" }}>
-                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#0a9ea0", flexShrink: 0, display: "inline-block" }} />
-                        <span style={{ color: "#0a6060", fontSize: 11 }}>{lang === "es" ? `${osmResult.filledCount} preguntas pre-completadas desde OpenStreetMap` : `${osmResult.filledCount} questions pre-filled from OpenStreetMap`}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ textAlign: "center" }}>
-                    <RadialScore pct={total} color={risk.dot} size={90} />
-                    <div style={{ ...s.badge, background: risk.bg, color: risk.color }}>{t.riskPrefix}{risk.label}</div>
-                    <div style={s.totalLbl}>{t.totalLabel}</div>
-                  </div>
-                </div>
-                <div style={s.grid}>
-                  {cats.map((cat) => {
-                    const pct = catPct(cat);
-                    const raw = catRaw(cat);
-                    const r = getRiskLevel(pct, lang);
-                    return (
-                      <div key={cat.id} style={{ ...s.catCard, borderTop: `3px solid ${r.dot}` }}>
-                        <div style={s.catHead}>
-                          <div>
-                            <div style={s.catName}>{cat.label}</div>
-                            <div style={s.catScore}>{raw} / {cat.maxScore} {t.pts}</div>
-                            <span style={{ ...s.badgeSm, background: r.bg, color: r.color }}>{r.label}</span>
-                          </div>
-                          <RadialScore pct={pct} color={r.dot} size={68} />
-                        </div>
-                        <button
-                          style={s.catToggle}
-                          onClick={() => setExpandedCats(prev => ({ ...prev, [cat.id]: !prev[cat.id] }))}>
-                          {expandedCats[cat.id]
-                            ? (lang === "es" ? "▲ Ocultar respuestas" : "▲ Hide answers")
-                            : (lang === "es" ? "▼ Ver respuestas" : "▼ Show answers")}
-                        </button>
-                        {expandedCats[cat.id] && (
-                          <>
-                            <div style={s.sep} />
-                            {cat.questions.map((q) => {
-                              const a = q.options.find((o) => o.score === answers[q.id]);
-                              return (
-                                <div key={q.id} style={{ marginBottom: 8 }}>
-                                  <span style={s.aQ}>{q.text}</span>
-                                  <span style={s.aA}>{a?.label ?? "—"} <span style={{ color: MUTED, fontWeight: 400 }}>({answers[q.id] ?? 0} {t.pts})</span></span>
-                                </div>
-                              );
-                            })}
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                <div style={s.methodNote}><strong>{lang === "es" ? "Metodología:" : "Methodology:"}</strong> {t.methodNote.replace(/^[^:]+: /, "")}</div>
-                <div style={{ ...s.methodNote, background: "#f0f9ff", borderColor: "#bae6fd", marginBottom: 20 }}>
-                  <strong>{t.recTitle}</strong>
-                  {t.rec.map((r) => (
-                    <div key={r.range} style={{ marginTop: 6 }}>
-                      <span style={{ fontWeight: 700, color: TEXT }}>{r.range}:</span> <span>{r.action}</span>
-                    </div>
-                  ))}
-                </div>
-                {(() => {
-                  const suggested = getSuggestedMeasures().slice(0, 6);
-                  if (suggested.length === 0) return null;
-                  return (
-                    <div style={{ marginBottom: 20 }}>
-                      <div style={s.suggestTitle}>{lang === "es" ? "Medidas recomendadas" : "Recommended measures"}</div>
-                      <div style={s.suggestSub}>{lang === "es" ? "Dimensiones con puntaje inferior al 50% — Guía PMUS Argentina" : "Dimensions scoring below 50% — Argentina SUMP Guide"}</div>
-                      <div style={s.suggestGrid}>
-                        {suggested.map(m => {
-                          const grp = MEASURES_DATA.find(g => g.measures.some(x => x.code === m.code));
-                          if (!grp) return null;
-                          return (
-                            <div key={m.code} style={{ ...s.suggestCard, borderTop: `3px solid ${grp.color}`, background: grp.light }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                                <span style={{ ...s.suggestCardCode, background: grp.color }}>{m.code}</span>
-                                <span style={s.suggestCardName}>{m.name[lang]}</span>
-                              </div>
-                              <p style={s.suggestCardDesc}>{m.desc[lang]}</p>
-                              <div style={s.suggestCardDivider} />
-                              {[
-                                { key: "tipos", val: Array.isArray(m.tipos) ? m.tipos.join(" · ") : null },
-                                { key: "horizonte", val: m.horizonte?.[lang] },
-                                { key: "costo", val: m.costo?.[lang] },
-                                { key: "ambito", val: m.ambito?.[lang] },
-                                { key: "ecm", val: m.ecm?.[lang] },
-                              ].map(row => row.val ? (
-                                <div key={row.key} style={s.suggestCardRow}>
-                                  <span style={{ ...s.suggestCardRowLabel, color: grp.color }}>{fieldLabel[row.key][lang]}</span>
-                                  <span style={s.suggestCardRowVal}>{row.val}</span>
-                                </div>
-                              ) : null)}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* BUTTONS OUTSIDE */}
-              <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
-                    <button
-                      style={s.btnOutline}
-                      onClick={() => { setAnswers({}); setCatIdx(0); setStep("quiz"); }}>
-                      {t.editBtn}
-                    </button>
-
-                    <button style={s.btnOutline} onClick={downloadReport}>
-                      {t.downloadBtn}
-                    </button>
-
-                    <button style={s.btnPrimary} onClick={reset}>
-                      {t.newBtn}
-                    </button>
-                </div>
-              </>
-          );
-        })()}
+        {step === "results" && (
+          <ResultsView
+            lang={lang} t={t}
+            apiLoading={apiLoading} MEASURES_DATA={MEASURES_DATA}
+            answers={answers} cats={cats}
+            cityName={cityName} osmResult={osmResult}
+            expandedCats={expandedCats} setExpandedCats={setExpandedCats}
+            catPct={catPct} catRaw={catRaw}
+            totalPct={totalPct} getSuggestedMeasures={getSuggestedMeasures}
+            onEdit={() => { setAnswers({}); setCatIdx(0); setStep("quiz"); }}
+            onDownload={downloadReport}
+            onReset={reset}
+            s={s}
+          />
+        )}
 
       </section>
 
       {/* CONTEXT SECTION */}
       <section style={s.contextSection}>
-        <div style={s.contextInner}>
-          <div style={s.contextTag}>{lang === "es" ? "Sobre la herramienta" : "About the tool"}</div>
-          <h2 style={s.sectionTitle}>{lang === "es" ? "Basado en la Guía PMUS Argentina" : "Based on the PMUS Argentina Guide"}</h2>
-          <p style={s.contextText}>{lang === "es" ? "Esta herramienta digitaliza el autodiagnóstico del Plan de Movilidad Urbana Sostenible (PMUS) desarrollado por Asociación Sustentar junto al Ministerio de Transporte de la Nación en 2023. Permite a municipios y autoridades de transporte evaluar su situación actual, identificar brechas y priorizar intervenciones de manera estructurada." : "This tool digitises the self-assessment of the Sustainable Urban Mobility Plan (SUMP) developed by Asociación Sustentar together with Argentina's Ministry of Transport in 2023. It allows municipalities and transport authorities to assess their current situation, identify gaps and prioritise interventions in a structured way."}</p>
-          <a href="https://datos.transporte.gob.ar/dataset/dd391c9d-8aeb-4508-a04d-feee67362608/resource/a461e4a5-26de-453e-b9dc-e64c616ad926/download/guia_para_la_planificacion_de_la_movilidad_urbana_sosostenible.pdf" target="_blank" rel="noreferrer" style={s.contextLink}>{lang === "es" ? "Ver guía completa →" : "View full guide →"}</a>
+      <div style={{
+        ...s.contextInner,
+        display: "flex",
+        gap: 32,
+        alignItems: "center"
+      }}>
+
+        {/* LEFT TEXT */}
+        <div style={{ flex: 1 }}>
+          <div style={s.contextTag}>
+            {lang === "es" ? "Sobre la herramienta" : "About the tool"}
+          </div>
+
+          <h2 style={s.sectionTitle}>
+            {lang === "es"
+              ? "Basado en la Guía PMUS Argentina"
+              : "Based on the PMUS Argentina Guide"}
+          </h2>
+
+          <p style={s.contextText}>
+            {lang === "es"
+              ? "Esta herramienta digitaliza el autodiagnóstico del Plan de Movilidad Urbana Sostenible (PMUS) desarrollado por Asociación Sustentar junto al Ministerio de Transporte de la Nación en 2023. Permite a municipios y autoridades de transporte evaluar su situación actual, identificar brechas y priorizar intervenciones de manera estructurada."
+              : "This tool digitises the self-assessment of the Sustainable Urban Mobility Plan (SUMP) developed by Asociación Sustentar together with Argentina's Ministry of Transport in 2023. It allows municipalities and transport authorities to assess their current situation, identify gaps and prioritise interventions in a structured way."}
+          </p>
+
+          <a
+            href="https://datos.transporte.gob.ar/dataset/dd391c9d-8aeb-4508-a04d-feee67362608/resource/a461e4a5-26de-453e-b9dc-e64c616ad926/download/guia_para_la_planificacion_de_la_movilidad_urbana_sosostenible.pdf"
+            target="_blank"
+            rel="noreferrer"
+            style={s.contextLink}
+          >
+            {lang === "es" ? "Ver guía completa ››" : "View full guide ››"}
+          </a>
         </div>
+
+        {/* RIGHT IMAGE */}
+        <img
+          src="/pmus-cover.jpg"
+          alt="PMUS Argentina Guide"
+          style={{
+            width: 160,
+            borderRadius: 12,
+            boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
+            cursor: "pointer"
+          }}
+          onClick={() =>
+            window.open("https://datos.transporte.gob.ar/dataset/dd391c9d-8aeb-4508-a04d-feee67362608/resource/a461e4a5-26de-453e-b9dc-e64c616ad926/download/guia_para_la_planificacion_de_la_movilidad_urbana_sosostenible.pdf")
+          }
+        />
+      </div>
       </section>
 
       {/* FEEDBACK SECTION */}
@@ -1113,224 +604,3 @@ export default function App() {
     </div>
   );
 }
-
-const s = {
-
-  stepProgress: { color: MUTED, fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 },
-  roleGrid: { display: "flex", flexDirection: "column", gap: 10 },
-  roleCard: { background: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "16px 20px", cursor: "pointer", textAlign: "left", fontFamily: "inherit" },
-  roleCardActive: { background: TEAL_LIGHT, borderColor: TEAL },
-  roleCardTitle: { color: TEXT, fontSize: 14, fontWeight: 600, marginBottom: 3 },
-  roleCardSub: { color: MUTED, fontSize: 12, lineHeight: 1.5 },
-
-  introTabBar: { display: "flex", gap: 4, borderBottom: `1px solid ${BORDER}`, marginBottom: 20, marginTop: 4 },
-  introTabBtn: { background: "transparent", border: "none", borderBottom: "2px solid transparent", padding: "8px 16px", fontSize: 12, fontWeight: 500, color: MUTED, cursor: "pointer", fontFamily: "inherit", marginBottom: -1 },
-  introTabBtnActive: { color: TEAL, borderBottomColor: TEAL, fontWeight: 700 },
-  introTabContent: { },
-  // ── LAYOUT ───────────────────────────────────────────────────
-  siteWrapper: { minHeight: "100vh", background: BG, fontFamily: "'Lato', 'Helvetica Neue', Arial, sans-serif" },
-
-  // ── STICKY HEADER ────────────────────────────────────────────
-  stickyHeader: { position: "sticky", top: 0, zIndex: 50, background: "rgba(255,255,255,0.95)", backdropFilter: "blur(8px)", borderBottom: `1px solid ${BORDER}`, boxShadow: "0 1px 0 rgba(42,122,106,0.06)" },
-  headerInner: { maxWidth: 1200, margin: "0 auto", padding: "0 40px", height: 58, display: "flex", alignItems: "center", gap: 14 },
-  navCityBadge: { background: TEAL_LIGHT, color: TEAL, border: `1px solid ${TEAL_MID}`, borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600 },
-  navRestartBtn: { background: "transparent", color: MUTED, border: `1px solid ${BORDER}`, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" },
-  helpBtn: { width: 28, height: 28, borderRadius: "50%", border: `1px solid ${BORDER}`, background: WHITE, color: MUTED, fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" },
-  langToggle: { display: "flex", border: `1px solid ${BORDER}`, borderRadius: 6, overflow: "hidden" },
-  langBtn: { background: WHITE, color: MUTED, border: "none", padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", letterSpacing: "0.05em" },
-  langBtnActive: { background: TEAL, color: WHITE },
-
-  // ── HERO ─────────────────────────────────────────────────────
-  heroSection: { background: WHITE, borderBottom: `1px solid ${BORDER}`, padding: "72px 40px 64px" },
-  heroInner: { maxWidth: 700, margin: "0 auto", textAlign: "center" },
-  heroBadge: {
-    display: "inline-block",
-    background: "rgba(255,255,255,0.12)",
-    color: "#fff",
-    border: "1px solid rgba(255,255,255,0.3)",
-    borderRadius: 20,
-    padding: "5px 14px",
-    fontSize: 11,
-    fontWeight: 600,
-    letterSpacing: "0.08em",
-    textTransform: "uppercase",
-    marginBottom: 20
-  },
-  heroTitle: {
-    color: "#fff",
-    fontSize: "clamp(28px, 4vw, 48px)",
-    fontWeight: 800,
-    lineHeight: 1.15,
-    margin: "0 0 20px",
-    letterSpacing: "-0.02em"
-  },
-  heroSub: { color: MUTED, fontSize: 13, lineHeight: 1.7, margin: "0 0 36px", maxWidth: 560, marginLeft: "auto", marginRight: "auto" },
-  heroStats: { display: "flex", alignItems: "center", justifyContent: "center", gap: 0, marginBottom: 36, background: TEAL_LIGHT, borderRadius: 12, padding: "16px 32px", border: `1px solid ${TEAL_MID}`, display: "inline-flex" },
-  heroStat: { display: "flex", flexDirection: "column", alignItems: "center", padding: "0 24px" },
-  heroStatNum: { color: TEAL, fontSize: 22, fontWeight: 800, lineHeight: 1 },
-  heroStatLabel: { color: MUTED, fontSize: 11, marginTop: 4, letterSpacing: "0.05em" },
-  heroStatDiv: { width: 1, height: 36, background: TEAL_MID },
-  heroScrollBtn: { display: "inline-block", background: TEAL, color: WHITE, borderRadius: 8, padding: "12px 28px", fontWeight: 600, fontSize: 14, textDecoration: "none", letterSpacing: "0.01em" },
-
-  // ── TOOL SECTION ─────────────────────────────────────────────
-  toolSection: { padding: "48px 40px 64px", display: "flex", flexDirection: "column", alignItems: "center" },
-
-  // ── CARD ─────────────────────────────────────────────────────
-  card: { background: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "36px 40px", maxWidth: 600, width: "100%", boxShadow: "0 2px 20px rgba(42,122,106,0.08)" },
-  header: { display: "flex", alignItems: "center", gap: 14, marginBottom: 28, paddingBottom: 20, borderBottom: `1px solid ${BORDER}` },
-  logoImg: { height: 30, objectFit: "contain" },
-  headerDiv: { width: 1, height: 22, background: BORDER },
-  headerSub: { color: MUTED, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 500 },
-  banner: { display: "flex", alignItems: "center", gap: 8, background: TEAL_LIGHT, border: `1px solid ${TEAL_MID}`, borderRadius: 6, padding: "7px 12px", marginBottom: 12, color: TEAL, fontSize: 12, fontWeight: 500 },
-  bannerDot: { display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: ACCENT, flexShrink: 0 },
-  sourceNote: { color: MUTED, fontSize: 11, lineHeight: 1.5, fontStyle: "italic" },
-  h1: { color: TEXT, fontSize: 17, fontWeight: 700, margin: "0 0 12px", lineHeight: 1.35 },
-  h2: { color: TEXT, fontSize: 16, fontWeight: 700, margin: "6px 0 4px" },
-  desc: { color: MUTED, fontSize: 12, lineHeight: 1.7, margin: "0 0 12px" },
-  desc2: { color: MUTED, fontSize: 11, margin: 0 },
-  chips: { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 24 },
-  chip: { background: TEAL_LIGHT, color: TEAL, border: `1px solid ${TEAL_MID}`, borderRadius: 20, padding: "5px 12px", fontSize: 12, fontWeight: 500 },
-  label: { display: "block", color: TEXT, fontSize: 12, fontWeight: 600, marginBottom: 6 },
-  input: { width: "100%", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "10px 14px", color: TEXT, fontSize: 14, outline: "none", boxSizing: "border-box", background: WHITE, fontFamily: "inherit", marginBottom: 20 },
-  select: { width: "100%", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "10px 14px", color: TEXT, fontSize: 14, outline: "none", boxSizing: "border-box", background: WHITE, fontFamily: "inherit", marginBottom: 20, cursor: "pointer", appearance: "auto" },
-  btnPrimary: { display: "block", width: "100%", background: TEAL, color: WHITE, border: "none", borderRadius: 7, padding: "12px 24px", fontWeight: 600, fontSize: 13, fontFamily: "inherit", cursor: "pointer" },
-  btnOutline: { background: WHITE, color: TEAL, border: `1px solid ${TEAL_MID}`, borderRadius: 7, padding: "10px 20px", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "inherit" },
-  btnSkip: { background: "transparent", color: MUTED, border: `1px dashed ${BORDER}`, borderRadius: 7, padding: "8px 14px", fontWeight: 500, fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginTop: 8, width: "100%", textAlign: "center" },
-  btnRestart: { background: "transparent", color: MUTED, border: "none", padding: "8px 4px", fontSize: 12, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 2 },
-  hint: { textAlign: "center", color: MUTED, fontSize: 12, marginTop: 12 },
-  progressBar: { height: 5, background: TEAL_LIGHT, borderRadius: 3, marginBottom: 20 },
-  progressFill: { height: "100%", background: TEAL, borderRadius: 3, transition: "width 0.3s" },
-  tabRow: { display: "flex", alignItems: "center", gap: 6, marginBottom: 24, flexWrap: "wrap" },
-  tab: { background: TEAL_LIGHT, color: MUTED, border: `1px solid ${BORDER}`, borderRadius: 8, width: 38, height: 38, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" },
-  tabActive: { background: TEAL, border: `1px solid ${TEAL}` },
-  tabDone: { border: `1px solid ${TEAL_MID}`, opacity: 0.65 },
-  checkPin: { position: "absolute", top: -5, right: -5, fontSize: 8, background: ACCENT, color: WHITE, borderRadius: "50%", width: 14, height: 14, display: "flex", alignItems: "center", justifyContent: "center" },
-  tabLabel: { color: TEXT, fontSize: 14, fontWeight: 600, marginLeft: 6 },
-  qBlock: { marginBottom: 20, paddingBottom: 20, borderBottom: `1px solid ${BORDER}` },
-  qText: { color: TEXT, fontSize: 12, lineHeight: 1.6, margin: "0 0 10px", fontWeight: 500 },
-  qNum: { color: TEAL, fontWeight: 700, marginRight: 4 },
-  opt: { background: WHITE, color: TEXT, border: `1px solid ${BORDER}`, borderRadius: 7, padding: "10px 12px", fontSize: 12, cursor: "pointer", textAlign: "left", lineHeight: 1.4, display: "flex", alignItems: "center", gap: 8, fontFamily: "inherit" },
-  optSel: { background: TEAL_LIGHT, borderColor: TEAL, color: TEAL },
-  radio: { width: 13, height: 13, borderRadius: "50%", border: `2px solid ${BORDER}`, flexShrink: 0 },
-  radioSel: { background: TEAL, border: `2px solid ${TEAL}` },
-  resultsTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", margin: "0 0 24px" },
-  cityPill: { display: "inline-block", background: TEAL_LIGHT, color: TEAL, border: `1px solid ${TEAL_MID}`, borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" },
-  totalLbl: { color: MUTED, fontSize: 11, marginTop: 4 },
-  badge: { display: "inline-block", borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 700, marginTop: 4 },
-  badgeSm: { display: "inline-block", borderRadius: 20, padding: "3px 9px", fontSize: 11, fontWeight: 700, marginTop: 4 },
-  grid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 20 },
-  catCard: { background: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "16px" },
-  catHead: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" },
-  catToggle: { marginTop: 10, background: "transparent", border: "none", color: MUTED, fontSize: 11, cursor: "pointer", fontFamily: "inherit", padding: "4px 0", textAlign: "left" },
-  catName: { color: TEXT, fontSize: 13, fontWeight: 700, margin: "4px 0 2px" },
-  catScore: { color: MUTED, fontSize: 11, marginBottom: 4 },
-  sep: { height: 1, background: BORDER, margin: "10px 0" },
-  aQ: { display: "block", color: MUTED, fontSize: 11, lineHeight: 1.4 },
-  aA: { display: "block", color: TEXT, fontSize: 11, fontWeight: 600, marginTop: 1 },
-  methodNote: { background: TEAL_LIGHT, border: `1px solid ${TEAL_MID}`, borderRadius: 7, padding: "12px 16px", color: MUTED, fontSize: 12, lineHeight: 1.6, marginBottom: 16 },
-
-  // ── INTRO TWO-COLUMN ─────────────────────────────────────────
-  introWrap: { display: "flex", gap: 24, alignItems: "flex-start", maxWidth: 1100, width: "100%", position: "relative" },
-
-  // ── TILES PANEL ──────────────────────────────────────────────
-  tilesPanel: { width: 220, flexShrink: 0, background: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "18px 16px", boxShadow: "0 2px 12px rgba(42,122,106,0.07)" },
-  tilesPanelTitle: { color: TEXT, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 },
-  tilesPanelSub: { color: MUTED, fontSize: 11, marginBottom: 14 },
-  tileGroup: { marginBottom: 12 },
-  tileGroupLabel: { fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 5 },
-  tileRow: { display: "flex", flexWrap: "wrap", gap: 4 },
-  tile: { border: "1.5px solid", borderRadius: 5, padding: "3px 6px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
-
-  // ── TILE MODAL ───────────────────────────────────────────────
-  tileModal: { position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.25)" },
-  tileModalBox: { background: WHITE, borderRadius: 10, padding: "20px 24px", maxWidth: 340, width: "90%", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" },
-  tileModalCode: { fontSize: 22, fontWeight: 800, letterSpacing: "0.04em" },
-  tileModalClose: { background: "transparent", border: "none", color: MUTED, fontSize: 16, cursor: "pointer", padding: 0 },
-  tileModalName: { color: TEXT, fontSize: 14, fontWeight: 700, marginBottom: 8 },
-  tileModalDesc: { color: MUTED, fontSize: 13, lineHeight: 1.6, margin: 0 },
-
-  // ── REVIEW ───────────────────────────────────────────────────
-  reviewCatBlock: { marginBottom: 20 },
-  reviewCatHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, paddingBottom: 6, borderBottom: `1px solid ${BORDER}` },
-  reviewCatLabel: { color: TEXT, fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" },
-  reviewEditBtn: { background: "transparent", color: TEAL, border: `1px solid ${TEAL_MID}`, borderRadius: 5, padding: "3px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" },
-  reviewRow: { display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 10px", borderRadius: 6, border: `1px solid ${BORDER}`, marginBottom: 5 },
-  reviewQNum: { color: MUTED, fontSize: 11, fontWeight: 600, flexShrink: 0, paddingTop: 2 },
-  reviewQText: { color: TEXT, fontSize: 12, lineHeight: 1.5 },
-  reviewAns: { fontSize: 11, fontWeight: 600, borderRadius: 10, padding: "2px 10px", flexShrink: 0, whiteSpace: "nowrap" },
-
-  // ── SUGGESTED MEASURES ───────────────────────────────────────
-  suggestTitle: { color: TEXT, fontSize: 13, fontWeight: 700, marginBottom: 4 },
-  suggestSub: { color: MUTED, fontSize: 11, marginBottom: 12 },
-  suggestGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
-  suggestCard: { background: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "14px 16px" },
-  suggestCardCode: { display: "inline-block", color: WHITE, fontSize: 11, fontWeight: 800, borderRadius: 5, padding: "2px 8px", letterSpacing: "0.06em", flexShrink: 0 },
-  suggestCardName: { color: TEXT, fontSize: 12, fontWeight: 700, lineHeight: 1.3 },
-  suggestCardDesc: { color: MUTED, fontSize: 11, lineHeight: 1.5, margin: "0 0 10px" },
-  suggestCardDivider: { height: 1, background: BORDER, marginBottom: 8 },
-  suggestCardRow: { display: "flex", gap: 8, marginBottom: 5, alignItems: "flex-start" },
-  suggestCardRowLabel: { fontSize: 10, fontWeight: 700, minWidth: 110, flexShrink: 0, paddingTop: 1 },
-  suggestCardRowVal: { color: TEXT, fontSize: 10, lineHeight: 1.4 },
-
-  // ── OSM PANEL ────────────────────────────────────────────────
-  osmPanel: { marginTop: 16, background: "#f0fbfb", border: "1px solid #b2e4e4", borderRadius: 8, padding: "14px 16px" },
-  osmPanelTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 },
-  osmPanelTitle: { color: "#0a6060", fontSize: 12, fontWeight: 700, marginBottom: 2 },
-  osmPanelSub: { color: MUTED, fontSize: 11, lineHeight: 1.4 },
-  osmBtn: { background: "#0a9ea0", color: WHITE, border: "none", borderRadius: 6, padding: "7px 14px", fontSize: 12, fontWeight: 600, fontFamily: "inherit", flexShrink: 0 },
-  osmResult: { marginTop: 12, paddingTop: 12, borderTop: "1px solid #b2e4e4" },
-  osmResultTitle: { color: "#0a6060", fontSize: 11, fontWeight: 600, marginBottom: 8 },
-  osmResultGrid: { display: "flex", flexDirection: "column", gap: 5 },
-  osmResultRow: { display: "flex", alignItems: "center", gap: 8 },
-  osmResultLabel: { color: TEXT, fontSize: 11, flex: 1 },
-  osmResultVal: { color: MUTED, fontSize: 11 },
-  osmResultScore: { fontSize: 10, fontWeight: 700, borderRadius: 10, padding: "2px 7px" },
-  osmAttrib: { color: MUTED, fontSize: 10, marginTop: 8, fontStyle: "italic" },
-  osmBadge: { display: "inline-block", background: "#0a9ea0", color: WHITE, fontSize: 9, fontWeight: 700, borderRadius: 4, padding: "1px 5px", marginLeft: 6, verticalAlign: "middle", letterSpacing: "0.04em" },
-
-  // ── ONBOARDING ───────────────────────────────────────────────
-  onboardOverlay: { position: "fixed", inset: 0, zIndex: 200, background: "rgba(15,30,25,0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" },
-  onboardBox: { background: WHITE, borderRadius: 14, padding: "40px 48px", maxWidth: 980, width: "100%", boxShadow: "0 24px 64px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto" },
-  onboardHeader: { display: "flex", alignItems: "center", gap: 14, marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${BORDER}` },
-  onboardHeaderDiv: { width: 1, height: 22, background: BORDER },
-  onboardHeaderSub: { color: MUTED, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 },
-  onboardSub: { color: MUTED, fontSize: 14, lineHeight: 1.7, margin: "0 0 24px" },
-  onboardGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32, marginBottom: 28 },
-  onboardSectionTitle: { color: TEXT, fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16, paddingBottom: 8, borderBottom: `1px solid ${BORDER}` },
-  onboardSection: { display: "flex", gap: 12, marginBottom: 16 },
-  onboardNumBadge: { width: 22, height: 22, borderRadius: "50%", background: TEAL, color: WHITE, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 },
-  onboardSecLabel: { color: TEXT, fontSize: 13, fontWeight: 600, marginBottom: 3 },
-  onboardSecDesc: { color: MUTED, fontSize: 12, lineHeight: 1.6 },
-  onboardCard: { background: "#f9fafb", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "16px", borderTop: `3px solid ${TEAL}` },
-  onboardCardCode: { display: "inline-block", background: TEAL, color: WHITE, fontSize: 13, fontWeight: 800, borderRadius: 5, padding: "3px 10px", marginBottom: 6, letterSpacing: "0.06em" },
-  onboardCardTitle: { color: TEXT, fontSize: 14, fontWeight: 700, marginBottom: 10 },
-  onboardCardDivider: { height: 1, background: BORDER, marginBottom: 10 },
-  onboardCardRow: { display: "flex", gap: 8, marginBottom: 7, alignItems: "flex-start" },
-  onboardCardRowLabel: { color: TEAL, fontSize: 11, fontWeight: 700, minWidth: 130, flexShrink: 0 },
-  onboardCardRowDesc: { color: MUTED, fontSize: 11, lineHeight: 1.4 },
-  onboardBtn: { width: "100%", background: TEAL, color: WHITE, border: "none", borderRadius: 8, padding: "13px 24px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.03em" },
-
-  // ── CONTEXT SECTION ──────────────────────────────────────────
-  contextSection: { background: WHITE, borderTop: `1px solid ${BORDER}`, padding: "72px 40px" },
-  contextInner: { maxWidth: 680, margin: "0 auto" },
-  contextTag: { display: "inline-block", background: TEAL_LIGHT, color: TEAL, border: `1px solid ${TEAL_MID}`, borderRadius: 20, padding: "4px 12px", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16 },
-  sectionTitle: { color: TEXT, fontSize: 20, fontWeight: 700, margin: "0 0 16px", letterSpacing: "-0.01em" },
-  contextText: { color: MUTED, fontSize: 13, lineHeight: 1.8, margin: "0 0 24px" },
-  contextLink: { color: TEAL, fontSize: 14, fontWeight: 600, textDecoration: "none", borderBottom: `1px solid ${TEAL_MID}`, paddingBottom: 2 },
-
-  // ── FEEDBACK SECTION ─────────────────────────────────────────
-  feedbackSection: { background: BG, borderTop: `1px solid ${BORDER}`, padding: "72px 40px" },
-  feedbackInner: { maxWidth: 600, margin: "0 auto" },
-  feedbackSub: { color: MUTED, fontSize: 12, lineHeight: 1.7, margin: "0 0 28px" },
-  feedbackForm: { display: "flex", flexDirection: "column", gap: 12 },
-  feedbackRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
-  feedbackInput: { border: `1px solid ${BORDER}`, borderRadius: 7, padding: "10px 14px", color: TEXT, fontSize: 13, outline: "none", background: WHITE, fontFamily: "inherit" },
-  feedbackTextarea: { border: `1px solid ${BORDER}`, borderRadius: 7, padding: "10px 14px", color: TEXT, fontSize: 13, outline: "none", background: WHITE, fontFamily: "inherit", resize: "vertical" },
-  feedbackSuccess: { background: TEAL_LIGHT, border: `1px solid ${TEAL_MID}`, borderRadius: 8, padding: "14px 18px", color: TEAL, fontSize: 14, fontWeight: 500 },
-
-  // ── FOOTER ───────────────────────────────────────────────────
-  siteFooter: { background: TEAL, padding: "48px 40px" },
-  footerInner: { maxWidth: 900, margin: "0 auto", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" },
-  footerText: { color: "rgba(255,255,255,0.75)", fontSize: 13, margin: 0 },
-  footerLink: { color: "rgba(255,255,255,0.6)", fontSize: 12, textDecoration: "none", borderBottom: "1px solid rgba(255,255,255,0.3)", paddingBottom: 2 },
-};
